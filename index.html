@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#ffffff" id="theme-color-meta" />
+  <!-- Imposta il tema (chiaro/scuro) prima del paint, per evitare lo sfarfallio. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+        var m = document.getElementById('theme-color-meta');
+        if (m) m.content = t === 'dark' ? '#1c2230' : '#ffffff';
+      } catch (e) { document.documentElement.dataset.theme = 'light'; }
+    })();
+  </script>
+  <meta name="description" content="App personale per tracciare l'effetto dei farmaci nel tempo. Dati 100% locali." />
+  <title>Tracciamento effetto farmaci</title>
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Farmaci" />
+
+  <link rel="preload" href="fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Chart.js incluso in locale: i grafici funzionano anche offline -->
+  <script src="lib/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1 id="app-title"><span class="brand-mark" id="brand-mark"></span><span id="app-title-text">Farmaci</span></h1>
+    <div class="header-actions">
+      <button id="theme-btn" class="header-btn" aria-label="Cambia tema chiaro/scuro"></button>
+      <button id="settings-btn" class="header-btn" aria-label="Impostazioni"></button>
+    </div>
+  </header>
+
+  <main id="app-main" class="app-main"></main>
+
+  <nav id="app-nav" class="app-nav"></nav>
+
+  <!-- App come modulo ES -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
