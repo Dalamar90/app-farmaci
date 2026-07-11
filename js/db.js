@@ -26,18 +26,11 @@ const STORES = {
   meta: { keyPath: 'key' },
 };
 
-// Store "di contenuto" (quelli sincronizzati). Ogni record riceve un timestamp
-// di modifica `_m`; le cancellazioni lasciano una lapide (tombstone) in meta,
-// così la fusione tra dispositivi (PC/telefono) è corretta.
+// Store "di contenuto" (quelli inclusi nell'unione dei backup). Ogni record
+// riceve un timestamp di modifica `_m`; le cancellazioni lasciano una lapide
+// (tombstone) in meta, così l'unione tra PC e telefono è corretta.
 const CONTENT_STORES = ['meds', 'sideEffectTypes', 'doses', 'checkins', 'sideEffectEntries', 'crashEntries'];
 export const SYNC_STORES = CONTENT_STORES;
-
-const _changeListeners = [];
-export function onChange(fn) { _changeListeners.push(fn); }
-function notifyChange(store) {
-  if (!CONTENT_STORES.includes(store)) return;
-  for (const fn of _changeListeners) { try { fn(); } catch (e) { /* ignore */ } }
-}
 
 let _dbPromise = null;
 
@@ -92,7 +85,6 @@ export async function put(store, value) {
   if (CONTENT_STORES.includes(store) && value && typeof value === 'object') value._m = Date.now();
   const t = await tx(store, 'readwrite');
   await reqToPromise(t.objectStore(store).put(value));
-  notifyChange(store);
   return value;
 }
 
@@ -109,7 +101,7 @@ export async function bulkPut(store, values) {
 export async function del(store, key) {
   const t = await tx(store, 'readwrite');
   await reqToPromise(t.objectStore(store).delete(key));
-  if (CONTENT_STORES.includes(store)) { await addTombstone(store, key); notifyChange(store); }
+  if (CONTENT_STORES.includes(store)) await addTombstone(store, key);
 }
 
 // Registra una lapide per una cancellazione (per propagarla in sincronizzazione).

@@ -1,9 +1,46 @@
 // exportImport.js — backup/ripristino in JSON (con unione), condivisione
 // del backup e export in CSV.
 
-import { dumpAll, restoreAll, dumpStores, applyStores, getTombstones, setTombstones } from './db.js';
-import { mergeData } from './sync.js';
+import { dumpAll, restoreAll, dumpStores, applyStores, getTombstones, setTombstones, SYNC_STORES } from './db.js';
 import { fmtDateTime } from './util.js';
+
+// --- Fusione tra archivi (usata dall'import "Unisci") -----------------------
+// Per ogni voce vince la versione più recente (timestamp _m); le cancellazioni
+// sono rappresentate da "lapidi" e vengono rispettate su entrambi i lati.
+function mergeData(localStores, localTombs, remoteStores, remoteTombs, localDefault) {
+  const tomb = new Map();
+  for (const t of [...(localTombs || []), ...(remoteTombs || [])]) {
+    const k = t.s + '|' + t.id;
+    if (t.m > (tomb.get(k) || 0)) tomb.set(k, t.m);
+  }
+  const stores = {};
+  for (const s of SYNC_STORES) {
+    const byId = new Map();
+    const consider = (arr, def) => {
+      for (const rec of (arr || [])) {
+        const m = rec._m || def;
+        const ex = byId.get(rec.id);
+        if (!ex || m > (ex._m || 0)) byId.set(rec.id, { ...rec, _m: m });
+      }
+    };
+    consider(localStores[s], localDefault); // record locali senza _m: trattati come "adesso"
+    consider(remoteStores[s], 0);
+    const out = [];
+    for (const rec of byId.values()) {
+      // Scarta solo se esiste davvero una lapide non più vecchia dell'ultima
+      // modifica (record senza _m non devono sparire in assenza di lapidi).
+      const tm = tomb.get(s + '|' + rec.id);
+      if (tm !== undefined && tm >= (rec._m || 0)) continue;
+      out.push(rec);
+    }
+    stores[s] = out;
+  }
+  const cutoff = Date.now() - 180 * 24 * 3600 * 1000;
+  const tombstones = [...tomb.entries()]
+    .map(([k, m]) => { const i = k.indexOf('|'); return { s: k.slice(0, i), id: k.slice(i + 1), m }; })
+    .filter((t) => t.m >= cutoff);
+  return { stores, tombstones };
+}
 
 function download(filename, content, type) {
   const blob = new Blob([content], { type });

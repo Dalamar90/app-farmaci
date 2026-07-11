@@ -2,11 +2,10 @@
 // backup/export, e nota legale.
 
 import { getAll, put, del, getMeta, setMeta } from '../db.js';
-import { uid, el, fmtDateTime } from '../util.js';
+import { uid, el } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, closeSheet, toast, confirmDialog } from '../ui.js';
 import { exportJSON, importJSON, importJSONMerge, exportCSV, canShareBackup, shareJSON } from '../exportImport.js';
-import { getStatus as getSyncStatus, setClientId, connect, disconnect, syncNow } from '../sync.js';
 import {
   remindersEnabled, enableReminders, disableReminders, setOffsets, notificationsSupported,
 } from '../reminders.js';
@@ -19,7 +18,6 @@ export async function renderSettings() {
     getMeta('reminderOffsets', DEFAULT_REMINDER_OFFSETS),
     remindersEnabled(),
   ]);
-  const syncStatus = await getSyncStatus();
 
   const root = el('div', { class: 'view view-settings' });
   root.append(el('button', { class: 'btn btn-secondary btn-back', onClick: () => nav.go('day') },
@@ -96,12 +94,6 @@ export async function renderSettings() {
     el('button', { class: 'btn btn-secondary btn-block', onClick: async () => { await exportCSV(); toast('CSV esportato'); } }, icon('download', { size: 18 }), 'Export per foglio di calcolo (CSV)'),
   );
   root.append(dataCard);
-
-  // --- Sincronizzazione automatica (avanzata, opzionale) ---
-  root.append(el('details', { class: 'card adv-card' },
-    el('summary', { class: 'adv-summary' }, 'Sincronizzazione automatica con Google Drive (avanzata)'),
-    syncCard(syncStatus),
-  ));
 
   // --- Zona pericolo ---
   root.append(el('div', { class: 'card card-danger' },
@@ -243,51 +235,4 @@ function smallBtn(name, onClick) {
     class: 'icon-btn' + (name === 'trash' ? ' danger' : ''), onClick,
     title: label, 'aria-label': label,
   }, icon(name, { size: 18 }));
-}
-
-// --- Sezione sincronizzazione Google Drive (dentro "avanzate") -------------
-function syncCard(status) {
-  const card = el('div', { class: 'adv-body' });
-  card.append(el('p', { class: 'form-hint' }, 'Alternativa automatica al travaso manuale: stessi dati su PC e telefono, sempre allineati. Il file vive nel TUO Drive, in uno spazio privato visibile solo a questa app. Richiede una configurazione iniziale su Google.'));
-
-  const cid = el('input', { class: 'input', placeholder: '…apps.googleusercontent.com', value: status.clientId || '' });
-  card.append(el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'ID client Google'), cid));
-  card.append(el('button', {
-    class: 'btn btn-secondary btn-block',
-    onClick: async () => { await setClientId(cid.value); toast('ID client salvato'); nav.refresh(); },
-  }, 'Salva ID client'));
-
-  if (status.clientId && status.enabled) {
-    card.append(el('div', { class: 'sync-status' }, icon('check', { size: 16 }),
-      el('span', {}, status.lastSync ? `Connesso · ultima sincronizzazione ${fmtDateTime(status.lastSync)}` : 'Connesso')));
-    card.append(el('button', {
-      class: 'btn btn-primary btn-block',
-      onClick: async () => { toast('Sincronizzo…'); const r = await syncNow(true); toast(r.ok ? 'Dati sincronizzati' : `Non riuscito: ${r.reason}`); nav.refresh(); },
-    }, icon('reset', { size: 18 }), 'Sincronizza ora'));
-    card.append(el('button', {
-      class: 'btn btn-secondary btn-block',
-      onClick: async () => { await disconnect(); toast('Disconnesso'); nav.refresh(); },
-    }, 'Disconnetti'));
-  } else if (status.clientId) {
-    card.append(el('button', {
-      class: 'btn btn-primary btn-block',
-      onClick: async () => {
-        try { await connect(); const r = await syncNow(true); toast(r.ok ? 'Connesso e sincronizzato' : `Connesso (sync: ${r.reason})`); nav.refresh(); }
-        catch (e) { toast('Connessione annullata'); }
-      },
-    }, 'Connetti Google Drive'));
-  }
-
-  card.append(el('details', { class: 'sync-help' },
-    el('summary', {}, "Come ottenere l'ID client (una volta sola)"),
-    el('ol', { class: 'help-list' },
-      el('li', {}, 'Apri ', el('a', { href: 'https://console.cloud.google.com/', target: '_blank', rel: 'noopener' }, 'console.cloud.google.com'), ' e crea un progetto.'),
-      el('li', {}, 'In "API e servizi → Libreria" abilita la Google Drive API.'),
-      el('li', {}, 'In "Schermata consenso OAuth": tipo Esterno, compila i campi minimi, e aggiungi la tua email come "Utente di test".'),
-      el('li', {}, 'In "Credenziali → Crea credenziali → ID client OAuth", scegli "Applicazione web".'),
-      el('li', {}, 'In "Origini JavaScript autorizzate" aggiungi: ', el('code', {}, location.origin), ' (e l\'URL https dove pubblicherai l\'app).'),
-      el('li', {}, "Copia l'ID client e incollalo qui sopra."),
-    ),
-  ));
-  return card;
 }

@@ -6,7 +6,6 @@ import { el } from './util.js';
 import { icon } from './icons.js';
 import { nav } from './nav.js';
 import { startTicker } from './reminders.js';
-import { initSync } from './sync.js';
 import { renderDay } from './views/day.js';
 import { renderChart } from './views/chart.js';
 import { renderDiary } from './views/diary.js';
@@ -126,11 +125,4 @@ if ('serviceWorker' in navigator) {
   await registerSW();
   startTicker();
   await render();
-  // Sincronizzazione Google Drive: ridisegna se arrivano dati nuovi da un altro
-  // dispositivo, ma non mentre stai scrivendo in un campo.
-  initSync(() => {
-    const tag = document.activeElement && document.activeElement.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    render({ animate: false, keepScroll: true });
-  });
 })();
