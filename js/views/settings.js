@@ -5,7 +5,7 @@ import { getAll, put, del, getMeta, setMeta } from '../db.js';
 import { uid, el, fmtDateTime } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, closeSheet, toast, confirmDialog } from '../ui.js';
-import { exportJSON, importJSON, exportCSV } from '../exportImport.js';
+import { exportJSON, importJSON, importJSONMerge, exportCSV, canShareBackup, shareJSON } from '../exportImport.js';
 import { getStatus as getSyncStatus, setClientId, connect, disconnect, syncNow } from '../sync.js';
 import {
   remindersEnabled, enableReminders, disableReminders, setOffsets, notificationsSupported,
@@ -84,18 +84,24 @@ export async function renderSettings() {
   }
   root.append(remCard);
 
-  // --- Sincronizzazione Google Drive ---
-  root.append(syncCard(syncStatus));
-
-  // --- Backup / Export ---
+  // --- Backup / Export / Travaso tra dispositivi ---
   const dataCard = el('div', { class: 'card' },
     el('h3', { class: 'card-title' }, 'Dati e backup'),
-    el('p', { class: 'form-hint' }, 'Tutti i dati restano sul tuo dispositivo. Fai backup periodici.'),
-    el('button', { class: 'btn btn-primary btn-block', onClick: async () => { await exportJSON(); toast('Backup JSON esportato'); } }, icon('download', { size: 18 }), 'Backup completo (JSON)'),
-    el('button', { class: 'btn btn-secondary btn-block', onClick: async () => { await exportCSV(); toast('CSV esportato'); } }, icon('download', { size: 18 }), 'Export per foglio di calcolo (CSV)'),
+    el('p', { class: 'form-hint' }, 'Tutti i dati restano sul tuo dispositivo. Per allineare PC e telefono: esporta il backup da uno, importalo sull\'altro con "Unisci" — non si perde nulla.'),
+    canShareBackup()
+      ? el('button', { class: 'btn btn-primary btn-block', onClick: async () => { const ok = await shareJSON(); if (ok) toast('Backup inviato'); } }, icon('upload', { size: 18 }), 'Invia backup…')
+      : null,
+    el('button', { class: 'btn ' + (canShareBackup() ? 'btn-secondary' : 'btn-primary') + ' btn-block', onClick: async () => { await exportJSON(); toast('Backup scaricato'); } }, icon('download', { size: 18 }), 'Scarica backup (JSON)'),
     importButton(),
+    el('button', { class: 'btn btn-secondary btn-block', onClick: async () => { await exportCSV(); toast('CSV esportato'); } }, icon('download', { size: 18 }), 'Export per foglio di calcolo (CSV)'),
   );
   root.append(dataCard);
+
+  // --- Sincronizzazione automatica (avanzata, opzionale) ---
+  root.append(el('details', { class: 'card adv-card' },
+    el('summary', { class: 'adv-summary' }, 'Sincronizzazione automatica con Google Drive (avanzata)'),
+    syncCard(syncStatus),
+  ));
 
   // --- Zona pericolo ---
   root.append(el('div', { class: 'card card-danger' },
@@ -196,23 +202,38 @@ function formatHours(min) {
   return r ? `${h} h ${r}` : `${h} h`;
 }
 
-// --- Pulsante import (con file picker) -------------------------------------
+// --- Pulsante import (con scelta Unisci / Sostituisci) ----------------------
 function importButton() {
   const file = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
-  file.addEventListener('change', async () => {
-    if (!file.files[0]) return;
-    if (!(await confirmDialog('Importare sostituirà TUTTI i dati attuali. Continuare?', { confirmLabel: 'Importa', danger: true }))) {
-      file.value = ''; return;
-    }
-    try {
-      await importJSON(file.files[0]);
-      toast('Import completato'); nav.refresh();
-    } catch (e) {
-      toast('File non valido');
-    }
-    file.value = '';
+  file.addEventListener('change', () => {
+    const f = file.files[0];
+    if (!f) return;
+    openSheet('Come importare questo backup?', el('div', { class: 'form' },
+      el('p', { class: 'form-hint' }, `File: ${f.name}`),
+      el('button', {
+        class: 'btn btn-primary btn-block',
+        onClick: async () => {
+          closeSheet();
+          try { await importJSONMerge(f); toast('Dati uniti'); nav.refresh(); }
+          catch (e) { toast('File non valido'); }
+          file.value = '';
+        },
+      }, 'Unisci (consigliato)'),
+      el('p', { class: 'form-hint' }, 'Aggiunge e aggiorna le voci del backup. Non cancella niente: per ogni voce vince la versione più recente.'),
+      el('button', {
+        class: 'btn btn-danger btn-block',
+        onClick: async () => {
+          closeSheet();
+          if (!(await confirmDialog('Sostituire TUTTI i dati attuali con quelli del backup?', { confirmLabel: 'Sostituisci', danger: true }))) { file.value = ''; return; }
+          try { await importJSON(f); toast('Dati sostituiti'); nav.refresh(); }
+          catch (e) { toast('File non valido'); }
+          file.value = '';
+        },
+      }, 'Sostituisci tutto'),
+      el('p', { class: 'form-hint' }, 'Cancella i dati di questo dispositivo e mette solo quelli del backup.'),
+    ), { onClose: () => { file.value = ''; } });
   });
-  const btn = el('button', { class: 'btn btn-secondary btn-block', onClick: () => file.click() }, icon('upload', { size: 18 }), 'Importa backup (JSON)');
+  const btn = el('button', { class: 'btn btn-secondary btn-block', onClick: () => file.click() }, icon('download', { size: 18 }), 'Importa backup (JSON)');
   return el('div', {}, btn, file);
 }
 
@@ -224,10 +245,10 @@ function smallBtn(name, onClick) {
   }, icon(name, { size: 18 }));
 }
 
-// --- Card sincronizzazione Google Drive ------------------------------------
+// --- Sezione sincronizzazione Google Drive (dentro "avanzate") -------------
 function syncCard(status) {
-  const card = el('div', { class: 'card' }, el('h3', { class: 'card-title' }, 'Sincronizza con Google Drive'));
-  card.append(el('p', { class: 'form-hint' }, 'Stessi dati su PC e telefono. Il file vive nel TUO Drive, in uno spazio privato visibile solo a questa app.'));
+  const card = el('div', { class: 'adv-body' });
+  card.append(el('p', { class: 'form-hint' }, 'Alternativa automatica al travaso manuale: stessi dati su PC e telefono, sempre allineati. Il file vive nel TUO Drive, in uno spazio privato visibile solo a questa app. Richiede una configurazione iniziale su Google.'));
 
   const cid = el('input', { class: 'input', placeholder: '…apps.googleusercontent.com', value: status.clientId || '' });
   card.append(el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'ID client Google'), cid));

@@ -386,6 +386,10 @@ html, body {
 .list-row:last-of-type { border-bottom: none; }
 .sync-status { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--accent-strong);
   background: var(--accent-tint); padding: 9px 12px; border-radius: var(--r-sm); font-weight: 600; }
+.adv-card { display: block; }
+.adv-summary { cursor: pointer; font-weight: 650; font-size: 0.95rem; color: var(--ink-soft); padding: 2px 0; }
+.adv-summary:hover { color: var(--ink); }
+.adv-body { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
 .sync-help { margin-top: 2px; font-size: 0.85rem; }
 .sync-help summary { cursor: pointer; color: var(--primary); font-weight: 600; padding: 6px 0; }
 .help-list { margin: 6px 0 0; padding-left: 20px; color: var(--ink-soft); line-height: 1.5; }

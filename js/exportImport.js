@@ -1,6 +1,8 @@
-// exportImport.js — backup/ripristino in JSON e export in CSV.
+// exportImport.js — backup/ripristino in JSON (con unione), condivisione
+// del backup e export in CSV.
 
-import { dumpAll, restoreAll } from './db.js';
+import { dumpAll, restoreAll, dumpStores, applyStores, getTombstones, setTombstones } from './db.js';
+import { mergeData } from './sync.js';
 import { fmtDateTime } from './util.js';
 
 function download(filename, content, type) {
@@ -21,22 +23,68 @@ function stamp() {
 
 // --- JSON (backup completo) ------------------------------------------------
 
-export async function exportJSON() {
+async function buildBackup() {
   const data = await dumpAll();
-  const payload = {
+  return {
     app: 'farmaco-tracker',
     version: 1,
     exportedAt: new Date().toISOString(),
     data,
   };
+}
+
+export async function exportJSON() {
+  const payload = await buildBackup();
   download(`backup-farmaci-${stamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
 }
 
+// La condivisione (menù "Invia a…" del telefono) è disponibile su questo dispositivo?
+export function canShareBackup() {
+  try {
+    const f = new File(['{}'], 'test.json', { type: 'application/json' });
+    return !!(navigator.canShare && navigator.canShare({ files: [f] }));
+  } catch (e) { return false; }
+}
+
+// Apre il menù di condivisione con il file di backup (telefono ↔ PC via
+// WhatsApp/email/quello che preferisci). Ritorna false se annullato.
+export async function shareJSON() {
+  const payload = await buildBackup();
+  const file = new File([JSON.stringify(payload, null, 2)], `backup-farmaci-${stamp()}.json`, { type: 'application/json' });
+  try {
+    await navigator.share({ files: [file], title: 'Backup farmaci' });
+    return true;
+  } catch (e) {
+    return false; // annullato dall'utente o non supportato
+  }
+}
+
+// Import "sostituisci tutto": cancella i dati attuali e mette quelli del file.
 export async function importJSON(file) {
   const text = await file.text();
   const parsed = JSON.parse(text);
   const data = parsed.data || parsed; // tollera sia il wrapper sia il dump nudo
   await restoreAll(data);
+}
+
+// Import "unisci": combina il backup con i dati attuali senza perdere nulla.
+// Per ogni voce vince la versione più recente; le cancellazioni si rispettano.
+export async function importJSONMerge(file) {
+  const text = await file.text();
+  const parsed = JSON.parse(text);
+  const data = parsed.data || parsed;
+
+  // Lapidi del backup: dentro meta (riga syncTombstones), se presenti.
+  const backupTombs = (() => {
+    const row = (data.meta || []).find((r) => r.key === 'syncTombstones');
+    return (row && Array.isArray(row.value)) ? row.value : [];
+  })();
+
+  const localStores = await dumpStores();
+  const localTombs = await getTombstones();
+  const merged = mergeData(localStores, localTombs, data, backupTombs, Date.now());
+  await applyStores(merged.stores);
+  await setTombstones(merged.tombstones);
 }
 
 // --- CSV --------------------------------------------------------------------

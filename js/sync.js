@@ -95,7 +95,8 @@ async function driveUpdate(token, fileId, dataObj) {
 }
 
 // --- Fusione (CRDT semplice: ultimo che scrive vince, per record) ----------
-function mergeData(localStores, localTombs, remoteStores, remoteTombs, localDefault) {
+// Esportata: usata anche dall'import "unisci" dei backup JSON.
+export function mergeData(localStores, localTombs, remoteStores, remoteTombs, localDefault) {
   const tomb = new Map();
   for (const t of [...(localTombs || []), ...(remoteTombs || [])]) {
     const k = t.s + '|' + t.id;
@@ -115,8 +116,10 @@ function mergeData(localStores, localTombs, remoteStores, remoteTombs, localDefa
     consider(remoteStores[s], 0);
     const out = [];
     for (const rec of byId.values()) {
-      const tm = tomb.get(s + '|' + rec.id) || 0;
-      if (tm >= (rec._m || 0)) continue; // cancellato dopo l'ultima modifica
+      // Scarta solo se esiste davvero una lapide non più vecchia dell'ultima
+      // modifica (record senza _m non devono sparire in assenza di lapidi).
+      const tm = tomb.get(s + '|' + rec.id);
+      if (tm !== undefined && tm >= (rec._m || 0)) continue;
       out.push(rec);
     }
     stores[s] = out;
