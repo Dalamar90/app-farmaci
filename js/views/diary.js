@@ -23,7 +23,7 @@ export async function renderDiary() {
     el('option', { value: '' }, 'Tutti i farmaci'),
     ...meds.map((m) => el('option', { value: m.name, ...(filter.med === m.name ? { selected: 'selected' } : {}) }, m.name)),
   );
-  const dateSel = el('input', { type: 'date', class: 'input', value: filter.date,
+  const dateSel = el('input', { type: 'date', class: 'input', 'aria-label': 'Filtra per data', value: filter.date,
     onChange: (e) => { filter.date = e.target.value; nav.refresh(); } });
   const clearBtn = el('button', { class: 'btn btn-secondary btn-sm',
     onClick: () => { filter.med = ''; filter.date = ''; nav.refresh(); } }, 'Azzera');
@@ -35,7 +35,9 @@ export async function renderDiary() {
   if (filter.date) list = list.filter((b) => new Date(b.dose.takenAt).toDateString() === new Date(filter.date).toDateString());
 
   if (!list.length) {
-    root.append(el('p', { class: 'empty-hint' }, 'Nessuna voce con questi filtri.'));
+    root.append(el('div', { class: 'empty-hint' },
+      el('div', { class: 'empty-ico' }, icon('diary', { size: 40, stroke: 1.5 })),
+      'Nessuna voce con questi filtri.'));
     return root;
   }
 

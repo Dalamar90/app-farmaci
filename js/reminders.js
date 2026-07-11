@@ -9,7 +9,7 @@
 //  - se il browser supporta i Notification Triggers, li usiamo come bonus (background).
 
 import { getMeta, setMeta } from './db.js';
-import { uid, fmtTime } from './util.js';
+import { uid } from './util.js';
 import { DEFAULT_REMINDER_OFFSETS } from './defaults.js';
 
 const PENDING_KEY = 'pendingReminders';

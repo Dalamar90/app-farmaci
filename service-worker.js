@@ -2,7 +2,7 @@
 // Strategia: "cache first" sui file dell'app, così funziona senza rete.
 // Aumenta CACHE_VERSION quando modifichi i file per forzare l'aggiornamento.
 
-const CACHE_VERSION = 'farmaci-v12';
+const CACHE_VERSION = 'farmaci-v13';
 
 const ASSETS = [
   'index.html',
@@ -48,19 +48,27 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+  // Non intercettare richieste verso altri domini (es. Google Drive/accounts):
+  // devono passare dirette alla rete, senza cache.
+  if (new URL(request.url).origin !== self.location.origin) return;
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request)
         .then((resp) => {
-          // Metti in cache le richieste GET stesse origini, per usi futuri.
-          if (resp && resp.status === 200 && new URL(request.url).origin === self.location.origin) {
+          // Metti in cache le richieste riuscite, per usi futuri offline.
+          if (resp && resp.status === 200) {
             const copy = resp.clone();
             caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
           }
           return resp;
         })
-        .catch(() => cached); // offline e non in cache: niente da fare
+        .catch(() => {
+          // Offline: per le navigazioni (es. apertura dell'app senza rete)
+          // serviamo la pagina dell'app dalla cache.
+          if (request.mode === 'navigate') return caches.match('index.html');
+          return Response.error();
+        });
     }),
   );
 });

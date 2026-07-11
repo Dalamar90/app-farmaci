@@ -2,6 +2,7 @@
 // Nessuna interpretazione medica: solo medie e osservazioni sui dati dell'utente.
 
 import { el, fmtDuration } from '../util.js';
+import { icon } from '../icons.js';
 import { statsByMedication, sideEffectStats, sleepVsDurationObservation } from '../stats.js';
 
 export async function renderStats() {
@@ -13,7 +14,9 @@ export async function renderStats() {
   root.append(el('p', { class: 'view-title' }, 'Statistiche'));
 
   if (!byMed.length) {
-    root.append(el('p', { class: 'empty-hint' }, 'Servono alcune dosi con marcatori e check-in per calcolare le statistiche.'));
+    root.append(el('div', { class: 'empty-hint' },
+      el('div', { class: 'empty-ico' }, icon('stats', { size: 40, stroke: 1.5 })),
+      'Servono alcune dosi con marcatori e check-in per calcolare le statistiche.'));
     return root;
   }
 

@@ -49,7 +49,7 @@ export const MARKERS = [
 export const CHECKIN_METRICS = [
   { key: 'intensity', label: 'Intensità effetto', color: '#2563eb' }, // blu
   { key: 'focus', label: 'Concentrazione / focus', color: '#16a34a' }, // verde
-  { key: 'energy', label: 'Energia', color: '#f97316' }, // arancione
+  { key: 'energy', label: 'Energia', color: '#ea580c' }, // arancione (3:1 su fondo chiaro)
   { key: 'mood', label: 'Umore', color: '#dc2626' }, // rosso
 ];
 

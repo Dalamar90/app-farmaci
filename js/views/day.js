@@ -62,7 +62,7 @@ export async function renderDay() {
 
   // ---------------------------------------------------------------- date bar
   function dateBar() {
-    const input = el('input', { type: 'date', class: 'input date-input', value: state.day,
+    const input = el('input', { type: 'date', class: 'input date-input', 'aria-label': 'Scegli il giorno', value: state.day,
       onChange: (e) => { state.day = e.target.value || dayStr(); state.editing = null; state.refDoseId = null; nav.refresh(); } });
     const shift = (days) => { const d = new Date(state.day + 'T12:00'); d.setDate(d.getDate() + days); state.day = dayStr(d); state.editing = null; state.refDoseId = null; nav.refresh(); };
     return el('div', { class: 'date-bar' },
@@ -417,9 +417,9 @@ export async function renderDay() {
 }
 
 function buildDayChart(bundles) {
+  if (dayChart) { dayChart.destroy(); dayChart = null; }
   const canvas = document.getElementById('day-chart');
   if (!canvas || !window.Chart) return;
-  if (dayChart) { dayChart.destroy(); dayChart = null; }
 
   const dark = isDark();
   const tickColor = dark ? 'rgba(226,232,240,0.8)' : 'rgba(71,85,105,0.95)';

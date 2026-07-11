@@ -87,9 +87,9 @@ export async function renderChart() {
 }
 
 function buildChart(bundles) {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
   const canvas = document.getElementById('effect-chart');
   if (!canvas || !window.Chart) return;
-  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
   const dark = isDark();
   const tickColor = dark ? 'rgba(226,232,240,0.8)' : 'rgba(71,85,105,0.95)';

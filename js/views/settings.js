@@ -217,8 +217,10 @@ function importButton() {
 }
 
 function smallBtn(name, onClick) {
+  const label = name === 'trash' ? 'Elimina' : 'Modifica';
   return el('button', {
     class: 'icon-btn' + (name === 'trash' ? ' danger' : ''), onClick,
+    title: label, 'aria-label': label,
   }, icon(name, { size: 18 }));
 }
 
