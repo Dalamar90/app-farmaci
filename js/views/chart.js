@@ -25,7 +25,7 @@ export async function renderChart() {
   if (!withData.length) {
     root.append(el('div', { class: 'empty-hint' },
       el('div', { class: 'empty-ico' }, icon('curve', { size: 40, stroke: 1.5 })),
-      'Ancora niente da confrontare. Registra una dose e qualche check-in, poi torna qui.'));
+      'Ancora niente da confrontare. Registra una dose e qualche voce "come mi sento", poi torna qui.'));
     return root;
   }
 

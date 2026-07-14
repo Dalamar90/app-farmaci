@@ -1,11 +1,10 @@
 // app.js — bootstrap dell'applicazione: shell, navigazione tra le viste,
 // registrazione del service worker (PWA), seed del database, avvio promemoria.
 
-import { ensureSeed } from './db.js';
+import { ensureSeed, migrateData } from './db.js';
 import { el } from './util.js';
 import { icon } from './icons.js';
 import { nav } from './nav.js';
-import { startTicker } from './reminders.js';
 import { renderDay } from './views/day.js';
 import { renderChart } from './views/chart.js';
 import { renderDiary } from './views/diary.js';
@@ -122,7 +121,7 @@ if ('serviceWorker' in navigator) {
 (async function start() {
   buildNav();
   await ensureSeed();
+  await migrateData();
   await registerSW();
-  startTicker();
   await render();
 })();

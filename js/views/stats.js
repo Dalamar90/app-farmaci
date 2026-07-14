@@ -16,7 +16,7 @@ export async function renderStats() {
   if (!byMed.length) {
     root.append(el('div', { class: 'empty-hint' },
       el('div', { class: 'empty-ico' }, icon('stats', { size: 40, stroke: 1.5 })),
-      'Servono alcune dosi con marcatori e check-in per calcolare le statistiche.'));
+      'Servono alcune dosi con momenti e voci "come mi sento" per calcolare le statistiche.'));
     return root;
   }
 

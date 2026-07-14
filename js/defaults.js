@@ -28,10 +28,16 @@ export function defaultSideEffectTypes() {
   ].map((name) => ({ id: uid(), name }));
 }
 
-// Promemoria EMA: minuti dopo la dose in cui ricordare un check-in.
-// Basati sulla farmacocinetica del metilfenidato IR negli adulti:
-// inizio ~20-30', picco 1-2h, durata ~3-4h, coda dopo.
-export const DEFAULT_REMINDER_OFFSETS = [30, 90, 180, 270]; // 30m, 1h30, 3h, 4h30
+// Promemoria effetto (Calendario): per ciascun momento chiave, minuti dopo la
+// dose in cui avvisare e se è attivo di default. Tempi basati sulla farmacocinetica
+// del metilfenidato IR (inizio ~20-30', picco 1-2h, durata ~3-4h). L'utente li può
+// modificare e, con abbastanza storico, adottare i propri tempi medi reali.
+export const DEFAULT_REMINDER_MOMENTS = {
+  start: { min: 30, on: false }, // Inizio effetto
+  peak: { min: 90, on: true }, // Picco (1h30)
+  decline: { min: 180, on: false }, // Inizio calo (3h)
+  end: { min: 210, on: true }, // Fine effetto (3h30)
+};
 
 // Finestra (in ore) entro cui una dose è considerata "attiva"
 // e mostrata in home per il check-in rapido.

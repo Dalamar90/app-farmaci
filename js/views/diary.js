@@ -6,9 +6,8 @@ import { el, fmtDate, fmtTime, fmtDuration, minutesBetween } from '../util.js';
 import { MARKERS, CHECKIN_METRICS, CRASH_METRICS } from '../defaults.js';
 import { toastAction } from '../ui.js';
 import { icon } from '../icons.js';
-import { loadAllBundles } from '../stats.js';
+import { loadAllBundles, recomputeDoseMarkers } from '../stats.js';
 import { openDayFor } from './day.js';
-import { cancelForDose } from '../reminders.js';
 import { nav } from '../nav.js';
 
 const filter = { med: '', date: '' };
@@ -62,7 +61,6 @@ function doseCard(b) {
       iconBtn('trash', 'Elimina dose', async () => {
         const snap = { dose, checkins, sideEffects, crashes };
         await deleteDoseCascade(dose.id);
-        await cancelForDose(dose.id);
         nav.refresh();
         toastAction('Dose eliminata', 'Annulla', async () => {
           await put('doses', snap.dose);
@@ -93,14 +91,14 @@ function doseCard(b) {
 
   // Check-in
   if (checkins.length) {
-    const block = el('div', { class: 'sub-block' }, el('div', { class: 'sub-title' }, `Check-in (${checkins.length})`));
+    const block = el('div', { class: 'sub-block' }, el('div', { class: 'sub-title' }, `Come mi sento (${checkins.length})`));
     for (const c of checkins) {
       const mins = minutesBetween(dose.takenAt, c.at);
       block.append(el('div', { class: 'sub-row' },
         el('span', { class: 'sub-time' }, `+${fmtDuration(mins)}`),
         el('span', { class: 'sub-vals' }, CHECKIN_METRICS.map((m) => `${shortLabel(m.key)} ${c[m.key] ?? '–'}`).join('  ')),
         iconBtn('edit', 'Modifica', () => openDayFor(dose.takenAt, { mode: 'checkin', editing: { type: 'checkin', data: c } })),
-        iconBtn('trash', 'Elimina', () => undoDelete('checkins', c, 'Check-in eliminato')),
+        iconBtn('trash', 'Elimina', () => undoDelete('checkins', c, 'Voce eliminata')),
       ));
     }
     card.append(block);
@@ -139,8 +137,13 @@ function doseCard(b) {
 
 async function undoDelete(store, item, msg) {
   await del(store, item.id);
+  if (store === 'checkins' && item.doseId) await recomputeDoseMarkers(item.doseId);
   nav.refresh();
-  toastAction(msg, 'Annulla', async () => { await put(store, item); nav.refresh(); });
+  toastAction(msg, 'Annulla', async () => {
+    await put(store, item);
+    if (store === 'checkins' && item.doseId) await recomputeDoseMarkers(item.doseId);
+    nav.refresh();
+  });
 }
 
 function shortLabel(key) {

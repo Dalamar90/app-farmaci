@@ -1,22 +1,21 @@
 // views/settings.js — configurazione: farmaci, effetti collaterali, promemoria EMA,
 // backup/export, e nota legale.
 
-import { getAll, put, del, getMeta, setMeta } from '../db.js';
+import { getAll, put, del } from '../db.js';
 import { uid, el } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, closeSheet, toast, confirmDialog } from '../ui.js';
 import { exportJSON, importJSON, importJSONMerge, exportCSV, canShareBackup, shareJSON } from '../exportImport.js';
 import {
-  remindersEnabled, enableReminders, disableReminders, setOffsets, notificationsSupported,
+  calendarRemindersEnabled, setCalendarRemindersEnabled, getReminderMoments, setReminderMoments,
 } from '../reminders.js';
-import { DEFAULT_REMINDER_OFFSETS } from '../defaults.js';
+import { historyMomentOffsets } from '../stats.js';
 import { nav } from '../nav.js';
 
 export async function renderSettings() {
-  const [meds, sideTypes, offsets, remOn] = await Promise.all([
+  const [meds, sideTypes, calOn, moments, hist] = await Promise.all([
     getAll('meds'), getAll('sideEffectTypes'),
-    getMeta('reminderOffsets', DEFAULT_REMINDER_OFFSETS),
-    remindersEnabled(),
+    calendarRemindersEnabled(), getReminderMoments(), historyMomentOffsets(),
   ]);
 
   const root = el('div', { class: 'view view-settings' });
@@ -60,25 +59,26 @@ export async function renderSettings() {
   fxCard.append(el('button', { class: 'btn btn-secondary btn-block', onClick: () => editSideType(null) }, icon('plus', { size: 18 }), 'Aggiungi effetto'));
   root.append(fxCard);
 
-  // --- Promemoria EMA ---
-  const remCard = el('div', { class: 'card' }, el('h3', { class: 'card-title' }, 'Promemoria check-in (EMA)'));
-  if (!notificationsSupported()) {
-    remCard.append(el('p', { class: 'form-hint' }, 'Le notifiche non sono supportate da questo browser.'));
-  } else {
-    const toggle = el('button', {
-      class: 'btn ' + (remOn ? 'btn-primary' : 'btn-secondary') + ' btn-block',
-      onClick: async () => {
-        if (remOn) { await disableReminders(); toast('Promemoria disattivati'); }
-        else {
-          const r = await enableReminders();
-          toast(r.ok ? 'Promemoria attivati' : `Non attivati: ${r.reason}`);
-        }
-        nav.refresh();
-      },
-    }, icon(remOn ? 'check' : 'bell', { size: 18 }), remOn ? 'Promemoria attivi (tocca per disattivare)' : 'Attiva promemoria');
-    remCard.append(toggle);
-    remCard.append(el('p', { class: 'form-hint' }, `Promemoria a: ${offsets.map(formatHours).join(' · ')} dopo la dose. Funzionano meglio con l'app aperta o aperta di recente.`));
-    remCard.append(el('button', { class: 'btn btn-secondary btn-block', onClick: () => editOffsets(offsets) }, 'Scegli quando ricordarti'));
+  // --- Promemoria effetto (Calendario) ---
+  const remCard = el('div', { class: 'card' }, el('h3', { class: 'card-title' }, 'Promemoria effetto (Calendario)'));
+  remCard.append(el('p', { class: 'form-hint' },
+    "Aggiunge gli avvisi al Calendario del telefono: suonano all'ora giusta anche con l'app chiusa, su iPhone e Android. Quando registri una dose, un tocco li mette nel calendario."));
+  const remToggle = el('button', {
+    class: 'btn ' + (calOn ? 'btn-primary' : 'btn-secondary') + ' btn-block',
+    onClick: async () => {
+      await setCalendarRemindersEnabled(!calOn);
+      toast(!calOn ? 'Promemoria attivati' : 'Promemoria disattivati');
+      nav.refresh();
+    },
+  }, icon(calOn ? 'check' : 'calendar', { size: 18 }), calOn ? 'Promemoria attivi (tocca per disattivare)' : 'Attiva promemoria');
+  remCard.append(remToggle);
+  if (calOn) {
+    remCard.append(el('p', { class: 'form-section' }, 'Quali momenti e a che ora dopo la dose'));
+    const work = moments.map((m) => ({ ...m }));
+    const persist = () => setReminderMoments(work);
+    for (const m of work) remCard.append(momentRow(m, hist[m.key], persist));
+    remCard.append(el('p', { class: 'form-hint' },
+      'Tempi proposti in base al metilfenidato IR: modificali a piacere. Quando avrai registrato abbastanza dosi coi momenti, tocca "storico" per usare i tuoi tempi medi reali.'));
   }
   root.append(remCard);
 
@@ -101,7 +101,7 @@ export async function renderSettings() {
     el('button', {
       class: 'btn btn-danger btn-block',
       onClick: async () => {
-        if (await confirmDialog('Cancellare TUTTI i dati (dosi, check-in, effetti, coda)? Fai prima un backup!', { confirmLabel: 'Cancella tutto', danger: true })) {
+        if (await confirmDialog('Cancellare TUTTI i dati (dosi, "come mi sento", effetti, coda)? Fai prima un backup!', { confirmLabel: 'Cancella tutto', danger: true })) {
           for (const s of ['doses', 'checkins', 'sideEffectEntries', 'crashEntries']) {
             const all = await getAll(s);
             for (const r of all) await del(s, r.id);
@@ -161,30 +161,41 @@ function editSideType(existing) {
   });
 }
 
-// --- Editor orari promemoria (chip a passi di mezz'ora) --------------------
-function editOffsets(offsets) {
-  const selected = new Set(offsets);
-  const grid = el('div', { class: 'chips offset-chips' });
-  for (let m = 30; m <= 360; m += 30) {
-    const min = m;
-    const b = el('button', {
-      type: 'button', class: 'chip chip-sm' + (selected.has(min) ? ' chip-on' : ''),
-      onClick: () => { if (selected.has(min)) selected.delete(min); else selected.add(min); b.classList.toggle('chip-on', selected.has(min)); },
-    }, formatHours(min));
-    grid.append(b);
-  }
-  openSheet('Quando ricordarti il check-in', el('div', { class: 'form' },
-    el('p', { class: 'form-hint' }, "Scegli a che distanza dalla dose vuoi i promemoria. Passi di mezz'ora." ),
-    grid), {
-    actions: [
-      { label: 'Annulla', kind: 'btn-secondary', onClick: () => closeSheet() },
-      { label: 'Salva', kind: 'btn-primary', onClick: async () => {
-        const vals = [...selected].sort((a, b) => a - b);
-        if (!vals.length) { toast('Scegli almeno un orario'); return; }
-        await setOffsets(vals); closeSheet(); toast('Promemoria aggiornati'); nav.refresh();
-      } },
-    ],
-  });
+// --- Riga di un momento nei promemoria (checkbox + tempo dopo la dose) ------
+function momentRow(m, histInfo, persist) {
+  const cb = el('input', { type: 'checkbox', class: 'moment-check', ...(m.on ? { checked: 'checked' } : {}) });
+  const hInput = el('input', { type: 'number', class: 'input input-sm', min: '0', max: '12', inputmode: 'numeric', value: String(Math.floor(m.min / 60)) });
+  const mInput = el('input', { type: 'number', class: 'input input-sm', min: '0', max: '55', step: '5', inputmode: 'numeric', value: String(m.min % 60) });
+  const syncDisabled = () => { hInput.disabled = mInput.disabled = !m.on; };
+  cb.addEventListener('change', () => { m.on = cb.checked; syncDisabled(); persist(); });
+  const updateMin = () => {
+    const h = Math.max(0, parseInt(hInput.value || '0', 10) || 0);
+    const mm = Math.max(0, parseInt(mInput.value || '0', 10) || 0);
+    m.min = Math.max(5, h * 60 + mm);
+    persist();
+  };
+  hInput.addEventListener('change', updateMin);
+  mInput.addEventListener('change', updateMin);
+  syncDisabled();
+
+  const histBtn = (histInfo && histInfo.n >= 2)
+    ? el('button', {
+      type: 'button', class: 'btn btn-secondary btn-xs', title: 'Usa il tuo tempo medio reale',
+      onClick: () => {
+        m.min = Math.max(5, histInfo.avg);
+        hInput.value = String(Math.floor(m.min / 60));
+        mInput.value = String(m.min % 60);
+        persist();
+        toast(`Impostato dal tuo storico (${histInfo.n} dosi)`);
+      },
+    }, `storico: ${formatHours(histInfo.avg)}`)
+    : null;
+
+  return el('div', { class: 'moment-row' },
+    el('label', { class: 'moment-main' }, cb, icon('m-' + m.key, { size: 16 }), el('span', {}, m.label)),
+    el('div', { class: 'moment-time' }, hInput, el('span', { class: 'unit' }, 'h'), mInput, el('span', { class: 'unit' }, 'm')),
+    histBtn,
+  );
 }
 
 // Formatta i minuti come ore leggibili: 30 → "30 min", 90 → "1 h 30", 180 → "3 h".

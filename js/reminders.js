@@ -1,148 +1,63 @@
-// reminders.js — promemoria EMA (notifiche per ricordare di registrare un check-in).
+// reminders.js — promemoria dell'effetto tramite il CALENDARIO del telefono.
 //
-// Sono SOLO solleciti a registrare un dato nel momento giusto, NON consigli medici.
+// Perché il calendario e non le notifiche web: una PWA senza server non può far
+// suonare una notifica a un orario futuro con l'app chiusa (su iPhone è proprio
+// impossibile). Il calendario nativo invece avvisa in modo affidabile, gratis e
+// senza server. Quando registri una dose, l'app prepara gli avvisi ai momenti
+// scelti (picco, fine, …) e li aggiunge al calendario con un tocco.
 //
-// Limite tecnico di una PWA senza server: le notifiche pianificate sono affidabili
-// soprattutto mentre l'app è aperta o usata di recente. Implementazione "best effort":
-//  - alla registrazione di una dose calcoliamo gli orari dei promemoria e li salviamo;
-//  - un timer controlla periodicamente quelli scaduti e mostra la notifica;
-//  - se il browser supporta i Notification Triggers, li usiamo come bonus (background).
+// Sono solo solleciti a registrare "come mi sento": NON sono consigli medici.
 
 import { getMeta, setMeta } from './db.js';
-import { uid } from './util.js';
-import { DEFAULT_REMINDER_OFFSETS } from './defaults.js';
+import { DEFAULT_REMINDER_MOMENTS, MARKERS } from './defaults.js';
+import { buildIcs } from './ics.js';
 
-const PENDING_KEY = 'pendingReminders';
-
-export function notificationsSupported() {
-  return 'Notification' in window;
+export async function calendarRemindersEnabled() {
+  return !!(await getMeta('calendarRemindersEnabled', false));
 }
 
-export async function remindersEnabled() {
-  return (await getMeta('remindersEnabled', false)) && Notification.permission === 'granted';
+export async function setCalendarRemindersEnabled(on) {
+  await setMeta('calendarRemindersEnabled', !!on);
 }
 
-export async function enableReminders() {
-  if (!notificationsSupported()) return { ok: false, reason: 'non supportate' };
-  let perm = Notification.permission;
-  if (perm === 'default') perm = await Notification.requestPermission();
-  if (perm !== 'granted') return { ok: false, reason: 'permesso negato' };
-  await setMeta('remindersEnabled', true);
-  return { ok: true };
-}
-
-export async function disableReminders() {
-  await setMeta('remindersEnabled', false);
-}
-
-async function getOffsets() {
-  return (await getMeta('reminderOffsets', DEFAULT_REMINDER_OFFSETS)) || DEFAULT_REMINDER_OFFSETS;
-}
-
-export async function setOffsets(offsets) {
-  await setMeta('reminderOffsets', offsets);
-}
-
-async function getPending() {
-  return (await getMeta(PENDING_KEY, [])) || [];
-}
-
-async function savePending(list) {
-  await setMeta(PENDING_KEY, list);
-}
-
-// Pianifica i promemoria per una nuova dose.
-export async function scheduleForDose(dose) {
-  if (!(await remindersEnabled())) return;
-  const offsets = await getOffsets();
-  const base = new Date(dose.takenAt).getTime();
-  const pending = await getPending();
-  for (const min of offsets) {
-    const at = base + min * 60000;
-    if (at <= Date.now()) continue; // saltiamo gli orari già passati
-    const id = uid();
-    pending.push({
-      id, doseId: dose.id, at, min,
-      label: `Check-in: sono passati ~${labelForMin(min)} dalla dose. Come va l'effetto?`,
-      fired: false,
-    });
-    // Bonus: Notification Trigger (se supportato dal browser/SW).
-    tryTrigger(id, at, dose);
-  }
-  await savePending(pending);
-}
-
-function labelForMin(min) {
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60), r = min % 60;
-  return r ? `${h}h ${r}m` : `${h}h`;
-}
-
-// Rimuove i promemoria ancora pendenti di una dose (es. dose cancellata o "effetto finito").
-export async function cancelForDose(doseId) {
-  const pending = await getPending();
-  await savePending(pending.filter((p) => p.doseId !== doseId));
-}
-
-// Mostra una notifica (via service worker se possibile, altrimenti Notification diretta).
-async function showNotification(title, body, data) {
-  try {
-    const reg = await navigator.serviceWorker?.ready;
-    if (reg && reg.showNotification) {
-      await reg.showNotification(title, {
-        body, tag: data?.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
-        data, requireInteraction: false,
-      });
-      return;
-    }
-  } catch (_) { /* fallback sotto */ }
-  if (Notification.permission === 'granted') new Notification(title, { body });
-}
-
-async function tryTrigger(id, at, dose) {
-  try {
-    const reg = await navigator.serviceWorker?.ready;
-    if (reg && 'showTrigger' in Notification.prototype && window.TimestampTrigger) {
-      await reg.showNotification('Promemoria check-in', {
-        tag: id,
-        body: "È il momento di un check-in sull'effetto.",
-        icon: 'icons/icon-192.png',
-        showTrigger: new TimestampTrigger(at),
-        data: { id, doseId: dose.id },
-      });
-    }
-  } catch (_) { /* non supportato: ci pensa il timer in foreground */ }
-}
-
-// Controlla i promemoria scaduti e li mostra. Chiamato dal ticker.
-export async function checkDue() {
-  if (!(await remindersEnabled())) return;
-  const pending = await getPending();
-  let changed = false;
-  const now = Date.now();
-  for (const p of pending) {
-    if (!p.fired && p.at <= now && now - p.at < 30 * 60000) {
-      await showNotification('Promemoria check-in', p.label, { id: p.id, doseId: p.doseId });
-      p.fired = true;
-      changed = true;
-    } else if (!p.fired && now - p.at >= 30 * 60000) {
-      p.fired = true; // troppo vecchio: lo marchiamo per non mostrarlo in ritardo
-      changed = true;
-    }
-  }
-  // Pulizia: togli quelli vecchi già gestiti (oltre 8 ore).
-  const cleaned = pending.filter((p) => now - p.at < 8 * 3600 * 1000);
-  if (cleaned.length !== pending.length) changed = true;
-  if (changed) await savePending(cleaned);
-}
-
-let _ticker = null;
-export function startTicker() {
-  if (_ticker) return;
-  checkDue();
-  _ticker = setInterval(checkDue, 30000);
-  // Controlla anche quando l'app torna in primo piano.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkDue();
+// Config dei momenti unita a etichette/icone dei MARKERS, nell'ordine giusto.
+// Ritorna [{ key, label, icon, min, on }].
+export async function getReminderMoments() {
+  const saved = (await getMeta('reminderMoments', DEFAULT_REMINDER_MOMENTS)) || DEFAULT_REMINDER_MOMENTS;
+  return MARKERS.map((mk) => {
+    const cfg = saved[mk.key] || DEFAULT_REMINDER_MOMENTS[mk.key] || { min: 90, on: false };
+    return { key: mk.key, label: mk.label, icon: mk.icon, min: cfg.min, on: !!cfg.on };
   });
+}
+
+export async function setReminderMoments(list) {
+  const obj = {};
+  for (const m of list) obj[m.key] = { min: m.min, on: !!m.on };
+  await setMeta('reminderMoments', obj);
+}
+
+// Testo dell'avviso per ciascun momento.
+function summaryFor(key, dose) {
+  const what = {
+    start: 'Inizio effetto — come va?',
+    peak: 'Picco effetto — come ti senti?',
+    decline: 'Inizio calo — come va?',
+    end: 'Fine effetto — com\'è andata?',
+  }[key] || 'Promemoria effetto';
+  return `💊 ${what} (${dose.medName} ${dose.doseMg}mg)`;
+}
+
+// Prepara il file calendario per una dose (solo i momenti attivi).
+// Ritorna { filename, ics, moments } oppure null se nessun momento è attivo.
+export async function buildDoseCalendar(dose) {
+  const moments = (await getReminderMoments()).filter((m) => m.on);
+  if (!moments.length) return null;
+  const base = new Date(dose.takenAt).getTime();
+  const events = moments.map((m) => ({
+    uid: `${dose.id}-${m.key}@app-farmaci`,
+    at: new Date(base + m.min * 60000).toISOString(),
+    summary: summaryFor(m.key, dose),
+    description: "Promemoria dall'app Tracciamento farmaci: apri e segna come ti senti. Non è un consiglio medico.",
+  }));
+  return { filename: 'promemoria-effetto.ics', ics: buildIcs(events), moments };
 }

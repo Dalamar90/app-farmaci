@@ -450,6 +450,18 @@ html, body {
 .mk-toggle:active { transform: scale(0.95); }
 .mk-on { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-strong); }
 
+/* --- Promemoria: righe "momento" in Impostazioni ------------------------- */
+.moment-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
+  padding: 10px 0; border-top: 1px solid var(--border); }
+.moment-main { display: flex; align-items: center; gap: 8px; flex: 1 1 44%;
+  font-weight: 600; font-size: 0.9rem; cursor: pointer; }
+.moment-check { width: 18px; height: 18px; accent-color: var(--primary); flex: none; }
+.moment-time { display: flex; align-items: center; gap: 4px; }
+.moment-time .unit { color: var(--ink-soft); font-size: 0.85rem; }
+.input-sm { width: 54px; padding: 6px 8px; text-align: center; font-variant-numeric: tabular-nums; }
+.input-sm:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-xs { padding: 5px 10px; font-size: 0.74rem; min-height: 0; border-radius: var(--r-sm); flex: none; }
+
 .day-chart-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: 16px; box-shadow: var(--shadow-sm); }
 .chip-sm { padding: 7px 12px; font-size: 0.82rem; min-height: 36px; }

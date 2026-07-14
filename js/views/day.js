@@ -3,7 +3,7 @@
 // A sinistra (o sopra, su telefono) l'inserimento; a destra gli eventi del giorno;
 // sotto il grafico degli effetti del giorno.
 
-import { getAll, get, put, del, deleteDoseCascade } from '../db.js';
+import { getAll, put, del, deleteDoseCascade } from '../db.js';
 import {
   el, uid, dayStr, timeStr, combineDayTime, isoToTime, isSameDay, dayLabel,
   fmtTime, fmtDuration, minutesBetween, hexAlpha, isDark,
@@ -13,8 +13,9 @@ import { icon } from '../icons.js';
 import {
   CHECKIN_METRICS, CRASH_METRICS, MARKERS, STOMACH_OPTIONS, ACTIVITY_OPTIONS,
 } from '../defaults.js';
-import { loadDoseBundle } from '../stats.js';
-import { scheduleForDose, cancelForDose } from '../reminders.js';
+import { loadDoseBundle, recomputeDoseMarkers } from '../stats.js';
+import { calendarRemindersEnabled, buildDoseCalendar } from '../reminders.js';
+import { addToCalendar } from '../ics.js';
 import { nav } from '../nav.js';
 
 const PALETTE = ['#4f46e5', '#0d9488', '#db2777', '#d97706'];
@@ -41,6 +42,7 @@ export async function renderDay() {
   const allDoses = (await getAll('doses')).sort((a, b) => new Date(a.takenAt) - new Date(b.takenAt));
   const dayDoses = allDoses.filter((d) => isSameDay(d.takenAt, state.day));
   const bundles = await Promise.all(dayDoses.map(loadDoseBundle));
+  const calEnabled = await calendarRemindersEnabled();
 
   const root = el('div', { class: 'view view-day' });
 
@@ -83,7 +85,7 @@ export async function renderDay() {
     // Selettore di cosa inserire
     const modes = [
       { key: 'dose', label: 'Dose', icon: 'pill' },
-      { key: 'checkin', label: 'Check-in', icon: 'clock' },
+      { key: 'checkin', label: 'Come mi sento', icon: 'clock' },
       { key: 'effetti', label: 'Effetti', icon: 'alert' },
       { key: 'coda', label: 'Coda', icon: 'crash' },
     ];
@@ -108,7 +110,7 @@ export async function renderDay() {
 
   function needDose() {
     return el('div', { class: 'entry-card empty-entry' },
-      el('p', {}, 'Per registrare check-in, effetti o coda serve prima una dose in questo giorno.'),
+      el('p', {}, 'Per registrare come ti senti, gli effetti o la coda serve prima una dose in questo giorno.'),
       el('button', { class: 'btn btn-primary', onClick: () => { state.mode = 'dose'; nav.refresh(); } },
         icon('plus', { size: 18 }), 'Aggiungi una dose'),
     );
@@ -166,55 +168,64 @@ export async function renderDay() {
           markers: ed ? (ed.markers || {}) : {},
         };
         await put('doses', dose);
-        if (!ed) await scheduleForDose(dose);
+        // Nuova dose + promemoria attivi: offri di metterli nel calendario (un tocco).
+        if (!ed && calEnabled) {
+          const cal = await buildDoseCalendar(dose);
+          if (cal) {
+            state.editing = null;
+            nav.refresh();
+            toastAction('Dose registrata · promemoria pronti', 'Aggiungi al calendario 📅',
+              () => addToCalendar(cal.filename, cal.ics));
+            return;
+          }
+        }
         finishEntry(ed ? 'Dose aggiornata' : 'Dose registrata');
       }, ed, 'Registra dose'),
     );
     return card;
   }
 
-  // ----- Form: Check-in (slider + marcatori del momento dell'effetto)
+  // ----- Form: "Come mi sento" (slider + momento della curva, scelta singola)
   function checkinForm(doses) {
     const ed = state.editing && state.editing.type === 'checkin' ? state.editing.data : null;
     if (ed) state.refDoseId = ed.doseId;
     const card = el('div', { class: 'entry-card' });
     const sliders = CHECKIN_METRICS.map((m) => ({ key: m.key, ctrl: slider(m.label, { value: ed ? (ed[m.key] ?? 0) : 0, color: m.color }) }));
-    const t = timeField('Ora del check-in', ed ? isoToTime(ed.at) : null);
+    const t = timeField('Ora', ed ? isoToTime(ed.at) : null);
 
-    // Marcatori: copia di lavoro dei marcatori della dose selezionata.
-    let working = {};
+    // Momento della curva: al più UNO (o nessuno). Tocca di nuovo per togliere.
+    let moment = ed && ed.moment ? ed.moment : null;
     const mkWrap = el('div', { class: 'mk-row' });
-    function loadDose(id) { const d = doses.find((x) => x.id === id); working = d ? { ...(d.markers || {}) } : {}; paintMarkers(); }
-    function paintMarkers() {
+    function paintMoments() {
       mkWrap.innerHTML = '';
       for (const mk of MARKERS) {
-        const on = !!working[mk.key];
+        const on = moment === mk.key;
         mkWrap.append(el('button', {
           type: 'button', class: 'mk-toggle' + (on ? ' mk-on' : ''), title: mk.label,
-          onClick: () => { if (working[mk.key]) delete working[mk.key]; else working[mk.key] = combineDayTime(state.day, t.get()); paintMarkers(); },
-        }, icon('m-' + mk.key, { size: 15 }), el('small', {}, on ? fmtTime(working[mk.key]) : mk.label)));
+          onClick: () => { moment = (moment === mk.key) ? null : mk.key; paintMoments(); },
+        }, icon('m-' + mk.key, { size: 15 }), el('small', {}, mk.label)));
       }
     }
-    const ref = refDoseField(doses, (id) => loadDose(id));
-    loadDose(ref.get());
+    paintMoments();
+    const ref = refDoseField(doses);
 
     card.append(
       ref.node,
       ...sliders.map((s) => s.ctrl.node),
       t.node,
-      el('p', { class: 'form-section' }, 'Momento dell\'effetto'),
-      el('p', { class: 'form-hint' }, "Segna inizio, picco, calo o fine: vengono registrati all'ora del check-in qui sopra." ),
+      el('p', { class: 'form-section' }, 'Momento dell\'effetto (facoltativo)'),
+      el('p', { class: 'form-hint' }, "Se questa è una tappa della curva, scegline una sola: viene registrata all'ora qui sopra. Tocca di nuovo per togliere." ),
       mkWrap,
       saveRow(async () => {
         const refId = ref.get();
-        const entry = { id: ed ? ed.id : uid(), doseId: refId, at: combineDayTime(state.day, t.get()) };
+        const entry = { id: ed ? ed.id : uid(), doseId: refId, at: combineDayTime(state.day, t.get()), moment: moment || null };
         for (const s of sliders) entry[s.key] = s.ctrl.get();
         await put('checkins', entry);
-        // Applica i marcatori alla dose di riferimento.
-        const dose = await get('doses', refId);
-        if (dose) { dose.markers = working; await put('doses', dose); if (working.end) await cancelForDose(dose.id); }
-        finishEntry(ed ? 'Check-in aggiornato' : 'Check-in salvato');
-      }, ed, 'Salva check-in'),
+        // I marcatori della dose si ricavano dai check-in che portano un momento.
+        await recomputeDoseMarkers(refId);
+        if (ed && ed.doseId && ed.doseId !== refId) await recomputeDoseMarkers(ed.doseId);
+        finishEntry(ed ? 'Aggiornato' : 'Salvato');
+      }, ed, 'Salva'),
     );
     return card;
   }
@@ -349,6 +360,11 @@ export async function renderDay() {
         el('span', { class: 'event-ico dose-ico' }, icon('pill', { size: 18 })),
         el('span', { class: 'event-text' }, el('strong', {}, `${d.medName} · ${d.doseMg} mg`), dur ? el('span', { class: 'dose-dur' }, ` · durata ${dur}`) : null),
         el('span', { class: 'event-actions' },
+          calEnabled ? actBtn('calendar', 'Aggiungi promemoria al calendario', async () => {
+            const cal = await buildDoseCalendar(d);
+            if (!cal) { toast('Attiva almeno un momento in Impostazioni › Promemoria'); return; }
+            await addToCalendar(cal.filename, cal.ics);
+          }) : null,
           actBtn('edit', 'Modifica dose', () => { state.mode = 'dose'; state.editing = { type: 'dose', data: d }; nav.refresh(); }),
           actBtn('trash', 'Elimina dose', () => deleteDose(b), true),
         ),
@@ -365,15 +381,19 @@ export async function renderDay() {
   async function deleteChild(kind, data) {
     const store = kind === 'checkin' ? 'checkins' : kind === 'effetto' ? 'sideEffectEntries' : 'crashEntries';
     await del(store, data.id);
+    if (kind === 'checkin' && data.doseId) await recomputeDoseMarkers(data.doseId);
     if (state.editing && state.editing.data && state.editing.data.id === data.id) state.editing = null;
     nav.refresh();
-    toastAction('Voce eliminata', 'Annulla', async () => { await put(store, data); nav.refresh(); });
+    toastAction('Voce eliminata', 'Annulla', async () => {
+      await put(store, data);
+      if (kind === 'checkin' && data.doseId) await recomputeDoseMarkers(data.doseId);
+      nav.refresh();
+    });
   }
 
   async function deleteDose(b) {
     const snapshot = { dose: b.dose, checkins: b.checkins, sideEffects: b.sideEffects, crashes: b.crashes };
     await deleteDoseCascade(b.dose.id);
-    await cancelForDose(b.dose.id);
     if (state.editing && state.editing.type === 'dose' && state.editing.data.id === b.dose.id) state.editing = null;
     nav.refresh();
     toastAction('Dose eliminata', 'Annulla', async () => {
@@ -408,7 +428,7 @@ export async function renderDay() {
     if (!hasData) {
       section.append(el('div', { class: 'empty-hint' },
         el('div', { class: 'empty-ico' }, icon('curve', { size: 40, stroke: 1.5 })),
-        'Aggiungi qualche check-in: qui prende forma la curva del tuo effetto.'));
+        'Segna qualche volta come ti senti: qui prende forma la curva del tuo effetto.'));
     } else {
       section.append(el('div', { class: 'chart-wrap' }, el('canvas', { id: 'day-chart' })));
     }

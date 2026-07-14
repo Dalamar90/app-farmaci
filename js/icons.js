@@ -23,6 +23,7 @@ const PATHS = {
   close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   bell: '<path d="M6 8.5a6 6 0 0 1 12 0c0 6.5 2.5 8.5 2.5 8.5h-17S6 15 6 8.5"/><path d="M10.2 20.5a2 2 0 0 0 3.6 0"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M3.5 10h17"/>',
   check: '<path d="M20 6.5 9.2 17.5 4 12.3"/>',
   reset: '<path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/>',
   'chevron-left': '<path d="m15 6-6 6 6 6"/>',

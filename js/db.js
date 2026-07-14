@@ -2,7 +2,7 @@
 // Tutti i dati restano sul dispositivo: nessun server, nessun invio esterno.
 
 import {
-  defaultMedications, defaultSideEffectTypes, DEFAULT_REMINDER_OFFSETS,
+  defaultMedications, defaultSideEffectTypes, DEFAULT_REMINDER_MOMENTS, MARKERS,
 } from './defaults.js';
 
 const DB_NAME = 'farmaco-tracker';
@@ -151,9 +151,32 @@ export async function ensureSeed() {
   if (seeded) return;
   await bulkPut('meds', defaultMedications());
   await bulkPut('sideEffectTypes', defaultSideEffectTypes());
-  await setMeta('reminderOffsets', DEFAULT_REMINDER_OFFSETS);
-  await setMeta('remindersEnabled', false); // si attiva su richiesta col permesso notifiche
+  await setMeta('reminderMoments', DEFAULT_REMINDER_MOMENTS);
+  await setMeta('calendarRemindersEnabled', false); // promemoria nel calendario, opt-in
   await setMeta('seeded', true);
+}
+
+// --- Migrazioni idempotenti (per dati già presenti da versioni precedenti) --
+
+// Un tempo i marcatori (inizio/picco/calo/fine) si accendevano in blocco dentro
+// il check-in. Ora ogni voce "come mi sento" porta al più UN momento (campo
+// `moment`), e i marcatori della dose si ricavano da lì. Qui travasiamo i vecchi
+// marcatori della dose sul check-in con la stessa ora, senza perdere nulla.
+export async function migrateData() {
+  if (await getMeta('checkinMomentsMigrated', false)) return;
+  const doses = await getAll('doses');
+  for (const dose of doses) {
+    const markers = dose.markers || {};
+    if (!Object.keys(markers).length) continue;
+    const checkins = await getByIndex('checkins', 'doseId', dose.id);
+    for (const mk of MARKERS) {
+      const time = markers[mk.key];
+      if (!time) continue;
+      const c = checkins.find((x) => !x.moment && x.at === time);
+      if (c) { c.moment = mk.key; await put('checkins', c); }
+    }
+  }
+  await setMeta('checkinMomentsMigrated', true);
 }
 
 // Raccoglie tutti i dati per export/backup.

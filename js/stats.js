@@ -2,8 +2,9 @@
 // IMPORTANTE: solo osservazioni descrittive sui dati dell'utente,
 // nessuna interpretazione medica.
 
-import { getAll, getByIndex } from './db.js';
+import { getAll, get, put, getByIndex } from './db.js';
 import { minutesBetween, avg, round1 } from './util.js';
+import { MARKERS } from './defaults.js';
 
 // Carica una dose "arricchita" con tutti i suoi figli.
 export async function loadDoseBundle(dose) {
@@ -42,6 +43,50 @@ export function timeToPeak(dose) {
   const m = dose.markers || {};
   if (m.peak) return minutesBetween(dose.takenAt, m.peak);
   return null;
+}
+
+// Minuti dalla dose alla fine dell'effetto.
+export function timeToEnd(dose) {
+  const m = dose.markers || {};
+  if (m.end) return minutesBetween(dose.takenAt, m.end);
+  return null;
+}
+
+// Ricava i marcatori della dose (inizio/picco/calo/fine) dai suoi check-in:
+// ogni check-in porta al più un `moment`, e la sua ora diventa quel marcatore.
+// Da chiamare dopo ogni salvataggio/cancellazione di un check-in.
+export async function recomputeDoseMarkers(doseId) {
+  const dose = await get('doses', doseId);
+  if (!dose) return;
+  const checkins = await getByIndex('checkins', 'doseId', doseId);
+  checkins.sort((a, b) => new Date(a.at) - new Date(b.at));
+  const markers = {};
+  for (const c of checkins) {
+    if (c.moment && MARKERS.some((m) => m.key === c.moment)) markers[c.moment] = c.at;
+  }
+  dose.markers = markers;
+  await put('doses', dose);
+}
+
+// Tempi medi reali dell'utente per ciascun momento (minuti dalla dose),
+// calcolati sullo storico. Usati per proporre i tempi dei promemoria.
+// Ritorna { peak: { avg, n }, end: { avg, n }, ... } solo per i momenti con dati.
+export async function historyMomentOffsets() {
+  const doses = await getAll('doses');
+  const buckets = {}; // key -> [minuti]
+  for (const d of doses) {
+    const m = d.markers || {};
+    for (const mk of MARKERS) {
+      if (!m[mk.key]) continue;
+      const mins = minutesBetween(d.takenAt, m[mk.key]);
+      if (typeof mins === 'number' && mins > 0) (buckets[mk.key] ||= []).push(mins);
+    }
+  }
+  const out = {};
+  for (const key of Object.keys(buckets)) {
+    out[key] = { avg: Math.round(avg(buckets[key])), n: buckets[key].length };
+  }
+  return out;
 }
 
 // Intensità massima registrata nei check-in (proxy del picco percepito).
