@@ -18,6 +18,23 @@ function esc(s) {
     .replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 }
 
+// Piega le righe lunghe (>75 ottetti) come richiede lo standard iCalendar: la
+// continuazione va a capo e inizia con uno spazio. Conta i byte UTF-8 e non
+// spezza mai un carattere multibyte (accenti, emoji): alcuni parser (iOS) sono
+// severi e rifiutano il file se le righe sono troppo lunghe.
+function foldLine(line) {
+  const enc = new TextEncoder();
+  let out = '';
+  let bytes = 0;
+  for (const ch of line) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > 74) { out += '\r\n '; bytes = 1; }
+    out += ch;
+    bytes += n;
+  }
+  return out;
+}
+
 // events: [{ uid, at (ISO), summary, description }]
 export function buildIcs(events) {
   const now = toICSDate(new Date());
@@ -49,23 +66,40 @@ export function buildIcs(events) {
     );
   }
   lines.push('END:VCALENDAR');
-  return lines.filter((l) => l != null).join('\r\n');
+  return lines.filter((l) => l != null).map(foldLine).join('\r\n');
 }
 
-// Consegna il file: sul telefono prova la condivisione (così puoi scegliere
-// "Calendario"); altrimenti (o su PC) scarica il .ics, che il sistema apre col
-// calendario. Ritorna 'shared' | 'downloaded' | 'cancelled'.
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  // iPadOS recente si presenta come "Mac": lo riconosciamo dal touch.
+  return /iPad|iPhone|iPod/.test(ua)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// Consegna i promemoria al calendario.
+// - iPhone/iPad: aprono direttamente la risorsa calendario → Safari mostra il
+//   foglio "Aggiungi tutti al calendario" (niente file da cercare).
+// - Android/PC: condivisione se disponibile, altrimenti scarica il .ics (che il
+//   sistema apre col calendario).
+// Ritorna 'ios-open' | 'shared' | 'downloaded' | 'cancelled'.
 export async function addToCalendar(filename, ics) {
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  const file = (typeof File !== 'undefined') ? new File([blob], filename, { type: 'text/calendar' }) : null;
 
+  if (isIOS()) {
+    const url = URL.createObjectURL(blob);
+    window.location.href = url; // Safari intercetta text/calendar e propone l'aggiunta
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+    return 'ios-open';
+  }
+
+  const file = (typeof File !== 'undefined') ? new File([blob], filename, { type: 'text/calendar' }) : null;
   if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Promemoria effetto' });
       return 'shared';
     } catch (e) {
       if (e && e.name === 'AbortError') return 'cancelled';
-      // qualunque altro errore: proviamo il download qui sotto
+      // altro errore: proviamo il download qui sotto
     }
   }
 
