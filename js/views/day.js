@@ -86,7 +86,7 @@ export async function renderDay() {
     const modes = [
       { key: 'dose', label: 'Dose', icon: 'pill' },
       { key: 'checkin', label: 'Come mi sento', icon: 'clock' },
-      { key: 'effetti', label: 'Effetti', icon: 'alert' },
+      { key: 'effetti', label: 'Effetti collaterali', icon: 'alert' },
       { key: 'coda', label: 'Coda', icon: 'crash' },
     ];
     const seg = el('div', { class: 'seg' });
@@ -110,7 +110,7 @@ export async function renderDay() {
 
   function needDose() {
     return el('div', { class: 'entry-card empty-entry' },
-      el('p', {}, 'Per registrare come ti senti, gli effetti o la coda serve prima una dose in questo giorno.'),
+      el('p', {}, 'Per registrare come ti senti, gli effetti collaterali o la coda serve prima una dose in questo giorno.'),
       el('button', { class: 'btn btn-primary', onClick: () => { state.mode = 'dose'; nav.refresh(); } },
         icon('plus', { size: 18 }), 'Aggiungi una dose'),
     );
@@ -243,7 +243,7 @@ export async function renderDay() {
     });
     card.append(
       ref.node,
-      el('p', { class: 'form-hint' }, 'Sposta solo gli slider degli effetti presenti. Quelli a 0 non vengono salvati.'),
+      el('p', { class: 'form-hint' }, 'Sposta solo gli slider degli effetti collaterali presenti. Quelli a 0 non vengono salvati.'),
       list,
       t.node,
       saveRow(async () => {
