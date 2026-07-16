@@ -93,6 +93,37 @@ export function closeSheet() {
   if (onClose) onClose();
 }
 
+// --- Drawer laterale (pannello che entra di lato) --------------------------
+// Diverso dal bottom-sheet: entra da destra ed è alto tutto lo schermo, adatto a
+// testo lungo da scorrere (la Guida). Si chiude con la X, col fondo o con Esc.
+let _drawerEl = null;
+export function openDrawer(title, contentNode, { onClose } = {}) {
+  closeDrawer();
+  const closeBtn = el('button', { class: 'sheet-close', 'aria-label': 'Chiudi', onClick: () => closeDrawer() }, icon('close', { size: 20 }));
+  const panel = el('aside', { class: 'drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    el('div', { class: 'drawer-header' }, el('h2', {}, title), closeBtn),
+    el('div', { class: 'drawer-body' }, contentNode),
+  );
+  const overlay = el('div', { class: 'overlay overlay-drawer' }, panel);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDrawer(); });
+  const onKey = (e) => { if (e.key === 'Escape') closeDrawer(); };
+  document.addEventListener('keydown', onKey);
+  document.body.append(overlay);
+  requestAnimationFrame(() => { overlay.classList.add('overlay-on'); closeBtn.focus(); });
+  _drawerEl = { overlay, onClose, onKey };
+  return { close: closeDrawer };
+}
+
+export function closeDrawer() {
+  if (!_drawerEl) return;
+  const { overlay, onClose, onKey } = _drawerEl;
+  _drawerEl = null;
+  document.removeEventListener('keydown', onKey);
+  overlay.classList.remove('overlay-on');
+  setTimeout(() => overlay.remove(), 300);
+  if (onClose) onClose();
+}
+
 // --- Toast (messaggio breve) -----------------------------------------------
 export function toast(msg) {
   const t = el('div', { class: 'toast' }, msg);

@@ -331,6 +331,46 @@ html, body {
 .sheet-footer .btn { flex: 1; }
 .confirm-msg { font-size: 1rem; line-height: 1.55; margin: 6px 0 10px; }
 
+/* --- Drawer laterale (la Guida) ------------------------------------------- */
+/* Entra da destra e occupa tutta l'altezza: fatto per il testo lungo da scorrere. */
+.overlay-drawer { align-items: stretch; justify-content: flex-end; }
+.drawer {
+  background: var(--surface); width: min(92vw, 420px); height: 100%;
+  display: flex; flex-direction: column; box-shadow: var(--shadow-lg);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%); transition: transform 0.3s var(--ease);
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.overlay-on .drawer { transform: translateX(0); }
+.drawer-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.drawer-header h2 { margin: 0; font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; }
+.drawer-body { overflow-y: auto; padding: 14px 16px 24px; -webkit-overflow-scrolling: touch; }
+
+/* --- Guida ---------------------------------------------------------------- */
+.guide { display: flex; flex-direction: column; gap: 8px; }
+.guide-intro { margin: 0 0 6px; font-size: 0.92rem; line-height: 1.6; color: var(--ink-soft); }
+.guide-sec { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
+.guide-sec[open] { background: var(--surface); border-color: var(--border-strong); }
+.guide-sum { cursor: pointer; list-style: none; padding: 12px 14px; font-weight: 650; font-size: 0.92rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.guide-sum::-webkit-details-marker { display: none; }
+.guide-sum::after { content: ''; width: 8px; height: 8px; flex-shrink: 0;
+  border-right: 2px solid var(--ink-faint); border-bottom: 2px solid var(--ink-faint);
+  transform: rotate(45deg) translate(-2px, -2px); transition: transform var(--t-fast) var(--ease); }
+.guide-sec[open] .guide-sum { color: var(--primary); }
+.guide-sec[open] .guide-sum::after { transform: rotate(-135deg) translate(-2px, -2px); border-color: var(--primary); }
+.guide-txt { padding: 0 14px 12px; font-size: 0.88rem; line-height: 1.6; color: var(--ink-soft); }
+.guide-txt p { margin: 0 0 10px; }
+.guide-txt p:last-child { margin-bottom: 0; }
+.guide-list { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.guide-moments { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px;
+  background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 12px; }
+.guide-moment { display: flex; align-items: flex-start; gap: 9px; font-size: 0.85rem; line-height: 1.45; }
+.guide-moment-ico { color: var(--accent); flex-shrink: 0; display: grid; place-items: center; padding-top: 2px; }
+.guide-moment strong { color: var(--ink); font-weight: 650; }
+.guide-legal { margin: 10px 0 0; font-size: 0.76rem; line-height: 1.5; color: var(--ink-faint); }
+
 /* --- Toast ---------------------------------------------------------------- */
 .toast {
   position: fixed; bottom: calc(var(--nav-h) + 18px); left: 50%;

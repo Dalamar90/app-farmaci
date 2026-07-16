@@ -2,7 +2,7 @@
 // Strategia: "cache first" sui file dell'app, così funziona senza rete.
 // Aumenta CACHE_VERSION quando modifichi i file per forzare l'aggiornamento.
 
-const CACHE_VERSION = 'farmaci-v21';
+const CACHE_VERSION = 'farmaci-v22';
 
 const ASSETS = [
   'index.html',
@@ -16,6 +16,7 @@ const ASSETS = [
   'js/util.js',
   'js/icons.js',
   'js/defaults.js',
+  'js/guide.js',
   'js/stats.js',
   'js/reminders.js',
   'js/ics.js',

@@ -31,6 +31,7 @@ const PATHS = {
   'arrow-left': '<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
   // Curva rise-peak-tail: la "firma" visiva dell'app.
   curve: '<path d="M3 19c3 0 4.5-12 8-12s4.5 9 7 9h3"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.8-2.7 2.8"/><line x1="12" x2="12.01" y1="17.2" y2="17.2"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   moon: '<path d="M12 3a6.5 6.5 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
 

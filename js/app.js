@@ -5,6 +5,7 @@ import { ensureSeed, migrateData } from './db.js';
 import { el } from './util.js';
 import { icon } from './icons.js';
 import { nav } from './nav.js';
+import { openGuide } from './guide.js';
 import { renderDay } from './views/day.js';
 import { renderChart } from './views/chart.js';
 import { renderDiary } from './views/diary.js';
@@ -28,6 +29,7 @@ const navBar = document.getElementById('app-nav');
 
 // Icone fisse dell'header.
 document.getElementById('brand-mark').append(icon('pill', { size: 17, stroke: 2 }));
+document.getElementById('guide-btn').append(icon('help', { size: 21 }));
 document.getElementById('settings-btn').append(icon('settings', { size: 22 }));
 
 // --- Tema chiaro/scuro (bottone sole/luna) ---------------------------------
@@ -98,6 +100,8 @@ nav.refresh = () => render({ animate: false, keepScroll: true });
 
 // Pulsante impostazioni nell'header: apre Impostazioni o torna al Giorno.
 document.getElementById('settings-btn').addEventListener('click', () => nav.go(current === 'settings' ? 'day' : 'settings'));
+// La guida si apre solo se la chiedi: mai da sola al primo avvio.
+document.getElementById('guide-btn').addEventListener('click', () => openGuide());
 document.getElementById('app-title').addEventListener('click', () => nav.go('day'));
 
 // Registrazione del service worker per la PWA (cache offline).
