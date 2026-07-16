@@ -146,7 +146,7 @@ export async function renderDay() {
     let medSelect = null;
     let medField;
     if (!meds.length) {
-      medNameInput = el('input', { class: 'input', placeholder: 'es. Ritalin IR', value: ed ? (ed.medName || '') : '' });
+      medNameInput = el('input', { class: 'input', placeholder: 'es. nome farmaco', value: ed ? (ed.medName || '') : '' });
       medField = el('label', { class: 'field' },
         el('span', { class: 'field-label' }, 'Farmaco'),
         medNameInput,

@@ -23,7 +23,8 @@ const VIEWS = {
 let current = 'day';
 const main = document.getElementById('app-main');
 const navBar = document.getElementById('app-nav');
-const titleEl = document.getElementById('app-title-text');
+// L'intestazione mostra il nome dell'app (fisso, da index.html): la vista attiva
+// si vede già evidenziata nella barra in basso.
 
 // Icone fisse dell'header.
 document.getElementById('brand-mark').append(icon('pill', { size: 17, stroke: 2 }));
@@ -68,7 +69,6 @@ async function render({ animate = true, keepScroll = false } = {}) {
   main.innerHTML = '';
   main.append(node);
   main.scrollTop = keepScroll ? prevScroll : 0;
-  titleEl.textContent = VIEWS[current].label;
   updateNav();
 }
 

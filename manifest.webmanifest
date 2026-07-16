@@ -1,6 +1,6 @@
 {
-  "name": "Tracciamento effetto farmaci",
-  "short_name": "Farmaci",
+  "name": "Effects-Tracker",
+  "short_name": "Effects",
   "description": "App personale per tracciare l'effetto dei farmaci nel tempo. Tutti i dati restano sul dispositivo.",
   "start_url": "index.html",
   "scope": "./",
