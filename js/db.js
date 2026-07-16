@@ -2,7 +2,7 @@
 // Tutti i dati restano sul dispositivo: nessun server, nessun invio esterno.
 
 import {
-  defaultMedications, defaultSideEffectTypes, DEFAULT_REMINDER_MOMENTS, MARKERS,
+  defaultSideEffectTypes, DEFAULT_REMINDER_MOMENTS, MARKERS,
 } from './defaults.js';
 
 const DB_NAME = 'farmaco-tracker';
@@ -149,7 +149,7 @@ export async function deleteDoseCascade(doseId) {
 export async function ensureSeed() {
   const seeded = await getMeta('seeded', false);
   if (seeded) return;
-  await bulkPut('meds', defaultMedications());
+  // Nessun farmaco precaricato: lo crea l'utente con la prima dose.
   await bulkPut('sideEffectTypes', defaultSideEffectTypes());
   await setMeta('reminderMoments', DEFAULT_REMINDER_MOMENTS);
   await setMeta('calendarRemindersEnabled', false); // promemoria nel calendario, opt-in

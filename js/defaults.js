@@ -3,19 +3,9 @@
 
 import { uid } from './util.js';
 
-// Farmaco preimpostato: Ritalin IR.
-// La dose in mg si sceglie al momento dell'assunzione (varia 10–15 mg),
-// quindi qui memorizziamo solo nome e dosi "rapide" suggerite.
-export function defaultMedications() {
-  return [
-    {
-      id: uid(),
-      name: 'Ritalin IR',
-      quickDoses: [10, 15], // chip rapidi nel form dose
-      active: true,
-    },
-  ];
-}
+// NIENTE farmaco preimpostato: l'app non presume cosa prendi.
+// Il farmaco (nome + dosi rapide) nasce dalla prima dose che registri: lo scrivi
+// nel form Dose e l'app se lo ricorda. Poi si modifica da Impostazioni › Farmaci.
 
 // Effetti collaterali precaricati (modificabili).
 export function defaultSideEffectTypes() {

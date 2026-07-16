@@ -43,6 +43,7 @@ export async function renderDay() {
   const dayDoses = allDoses.filter((d) => isSameDay(d.takenAt, state.day));
   const bundles = await Promise.all(dayDoses.map(loadDoseBundle));
   const calEnabled = await calendarRemindersEnabled();
+  const meds = await getAll('meds');
 
   const root = el('div', { class: 'view view-day' });
 
@@ -137,9 +138,47 @@ export async function renderDay() {
     const ed = state.editing && state.editing.type === 'dose' ? state.editing.data : null;
     const card = el('div', { class: 'entry-card' });
 
+    // Farmaco: se non ne hai ancora, lo scrivi qui e l'app se lo ricorda (insieme
+    // alla dose). Con più farmaci configurati scegli quale. Si modifica poi da
+    // Impostazioni › Farmaci.
+    const edMed = ed ? meds.find((m) => m.id === ed.medicationId) : null;
+    let medNameInput = null;
+    let medSelect = null;
+    let medField;
+    if (!meds.length) {
+      medNameInput = el('input', { class: 'input', placeholder: 'es. Ritalin IR', value: ed ? (ed.medName || '') : '' });
+      medField = el('label', { class: 'field' },
+        el('span', { class: 'field-label' }, 'Farmaco'),
+        medNameInput,
+        el('span', { class: 'form-hint' }, "Scrivilo una volta sola: l'app lo ricorda insieme alla dose. Poi si cambia da Impostazioni › Farmaci."));
+    } else if (meds.length === 1) {
+      medField = el('div', { class: 'field' },
+        el('span', { class: 'field-label' }, 'Farmaco'),
+        el('div', { class: 'med-name' }, meds[0].name));
+    } else {
+      const cur = (edMed || meds[0]).id;
+      medSelect = el('select', { class: 'input', onChange: () => paintMgChips() },
+        ...meds.map((m) => el('option', { value: m.id, ...(m.id === cur ? { selected: 'selected' } : {}) }, m.name)));
+      medField = el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Farmaco'), medSelect);
+    }
+    const selectedMed = () => {
+      if (!meds.length) return null;
+      if (medSelect) return meds.find((m) => m.id === medSelect.value) || meds[0];
+      return edMed || meds[0];
+    };
+
     const mgInput = el('input', { type: 'number', class: 'input input-mg', min: '0', step: '0.5', inputmode: 'decimal', placeholder: 'mg', value: ed ? ed.doseMg : '' });
-    const mgChips = chips([{ label: '10 mg', value: 10 }, { label: '15 mg', value: 15 }], { selected: ed && [10, 15].includes(ed.doseMg) ? ed.doseMg : null });
-    mgChips.node.addEventListener('click', () => { const v = mgChips.get(); if (v != null) mgInput.value = v; });
+    // I chip rapidi nascono dalle "dosi rapide" del farmaco scelto: niente valori fissi.
+    const mgChipsWrap = el('div', { class: 'mg-chips' });
+    function paintMgChips() {
+      mgChipsWrap.innerHTML = '';
+      const quick = (selectedMed()?.quickDoses) || [];
+      if (!quick.length) return;
+      const c = chips(quick.map((d) => ({ label: d + ' mg', value: d })), { selected: ed && quick.includes(ed.doseMg) ? ed.doseMg : null });
+      c.node.addEventListener('click', () => { const v = c.get(); if (v != null) mgInput.value = v; });
+      mgChipsWrap.append(c.node);
+    }
+    paintMgChips();
 
     const t = timeField('Ora', ed ? isoToTime(ed.takenAt) : null);
     const ctx = ed && ed.context ? ed.context : {};
@@ -148,7 +187,8 @@ export async function renderDay() {
     const activity = chips(ACTIVITY_OPTIONS, { selected: ctx.activity || null });
 
     card.append(
-      el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Dose'), el('div', { class: 'mg-row' }, mgChips.node, mgInput)),
+      medField,
+      el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Dose'), el('div', { class: 'mg-row' }, mgChipsWrap, mgInput)),
       t.node,
       el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Stomaco / pasto'), stomach.node),
       el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Ore di sonno la notte prima'), sleep),
@@ -156,12 +196,18 @@ export async function renderDay() {
       saveRow(async () => {
         const mg = parseFloat(mgInput.value);
         if (isNaN(mg)) { toast('Inserisci i mg della dose'); return; }
-        const meds = await getAll('meds');
-        const med = (ed && meds.find((m) => m.id === ed.medicationId)) || meds[0];
+        let med = selectedMed();
+        if (!med) {
+          const name = (medNameInput.value || '').trim();
+          if (!name) { toast('Scrivi il nome del farmaco'); return; }
+          // Primo farmaco: memorizziamo nome E dose, così dalla prossima volta ci sono già.
+          med = { id: uid(), name, quickDoses: [mg], active: true };
+          await put('meds', med);
+        }
         const dose = {
           id: ed ? ed.id : uid(),
-          medicationId: med ? med.id : null,
-          medName: med ? med.name : 'Farmaco',
+          medicationId: med.id,
+          medName: med.name,
           doseMg: mg,
           takenAt: combineDayTime(state.day, t.get()),
           context: { stomach: stomach.get(), sleepHours: sleep.value === '' ? null : parseFloat(sleep.value), activity: activity.get() },

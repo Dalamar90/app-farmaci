@@ -261,6 +261,10 @@ html, body {
 .textarea { min-height: 72px; resize: vertical; }
 .mg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .input-mg { max-width: 96px; font-variant-numeric: tabular-nums; }
+/* Nome del farmaco configurato, mostrato sopra la dose. */
+.med-name { font-family: var(--font-display); font-weight: 700; font-size: 1.02rem; letter-spacing: -0.01em; }
+/* Senza dosi rapide configurate non ci sono chip: niente spazio vuoto. */
+.mg-chips:empty { display: none; }
 .form-section { font-weight: 700; margin: 6px 0 0; font-size: 0.95rem; letter-spacing: -0.01em; }
 .form-hint { font-size: 0.85rem; color: var(--ink-soft); margin: 0; line-height: 1.45; }
 .sep { border: none; border-top: 1px solid var(--border); margin: 2px 0; }
