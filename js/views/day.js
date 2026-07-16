@@ -16,19 +16,29 @@ import {
 import { loadDoseBundle, recomputeDoseMarkers } from '../stats.js';
 import { calendarRemindersEnabled, buildDoseCalendar } from '../reminders.js';
 import { addToCalendar } from '../ics.js';
+import { renderWeek, viewSwitch as buildViewSwitch } from './week.js';
 import { nav } from '../nav.js';
 
 const PALETTE = ['#4f46e5', '#0d9488', '#db2777', '#d97706'];
 
 // Stato della vista (persistente finché l'app è aperta).
-const state = { day: null, mode: 'dose', editing: null, refDoseId: null, metrics: null };
+// view: 'day' = il giorno in dettaglio, 'week' = le dosi della settimana.
+const state = { day: null, view: 'day', mode: 'dose', editing: null, refDoseId: null, metrics: null };
 
 let dayChart = null;
+
+// Interruttore Giorno/Settimana, cablato sullo stato di questa vista.
+const viewSwitch = () => buildViewSwitch(state.view, (v) => {
+  state.view = v;
+  state.editing = null;
+  nav.go('day'); // passare da giorno a settimana è un cambio di vista: animalo
+});
 
 // Apre la pagina Giorno su una certa data, eventualmente in modifica di una voce.
 // Usata dal Diario per modificare senza aprire pop-up.
 export function openDayFor(iso, { mode, editing } = {}) {
   state.day = dayStr(new Date(iso));
+  state.view = 'day';
   if (mode) state.mode = mode;
   state.editing = editing || null;
   state.refDoseId = null;
@@ -39,6 +49,17 @@ export async function renderDay() {
   if (state.day === null) state.day = dayStr();
   if (state.metrics === null) state.metrics = new Set(['intensity']);
 
+  if (state.view === 'week') {
+    const root = el('div', { class: 'view view-week' });
+    root.append(viewSwitch());
+    root.append(await renderWeek({
+      day: state.day,
+      setDay: (d) => { state.day = d; nav.refresh(); },
+      openDay: (d) => { state.day = d; state.view = 'day'; state.editing = null; state.refDoseId = null; nav.go('day'); },
+    }));
+    return root;
+  }
+
   const allDoses = (await getAll('doses')).sort((a, b) => new Date(a.takenAt) - new Date(b.takenAt));
   const dayDoses = allDoses.filter((d) => isSameDay(d.takenAt, state.day));
   const bundles = await Promise.all(dayDoses.map(loadDoseBundle));
@@ -47,6 +68,7 @@ export async function renderDay() {
 
   const root = el('div', { class: 'view view-day' });
 
+  root.append(viewSwitch());
   root.append(dateBar());
 
   const grid = el('div', { class: 'day-grid' },
