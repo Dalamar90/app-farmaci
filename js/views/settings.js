@@ -78,7 +78,7 @@ export async function renderSettings() {
     const persist = () => setReminderMoments(work);
     for (const m of work) remCard.append(momentRow(m, hist[m.key], persist));
     remCard.append(el('p', { class: 'form-hint' },
-      'Tempi proposti in base al metilfenidato IR: modificali a piacere. Quando avrai registrato abbastanza dosi coi momenti, tocca "storico" per usare i tuoi tempi medi reali.'));
+      'Tempi proposti di partenza: modificali a piacere. Quando avrai registrato abbastanza dosi coi momenti, tocca "storico" per usare i tuoi tempi medi reali.'));
   }
   root.append(remCard);
 
