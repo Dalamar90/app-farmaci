@@ -6,13 +6,23 @@ import { el, fmtDate, fmtTime, minutesBetween, hexAlpha, isDark } from '../util.
 import { CHECKIN_METRICS, MARKERS } from '../defaults.js';
 import { icon } from '../icons.js';
 import { loadAllBundles } from '../stats.js';
+import { nav } from '../nav.js';
 
 // Colore per dose (serie), tratteggio per metrica.
 const PALETTE = ['#4f46e5', '#0d9488', '#db2777', '#d97706', '#0891b2', '#7c3aed', '#dc2626', '#65a30d'];
 const DASHES = [[], [7, 4], [2, 3], [9, 3, 2, 3]];
 
+// Filtro per periodo della lista dosi: con mesi di dati la lista diventa
+// chilometrica. Preset a un tocco (niente date da compilare a mano).
+const PERIODS = [
+  { key: '7', label: 'Ultima settimana', days: 7 },
+  { key: '30', label: 'Ultimo mese', days: 30 },
+  { key: '90', label: 'Ultimi 3 mesi', days: 90 },
+  { key: 'all', label: 'Tutte', days: null },
+];
+
 // Stato locale della vista (persistente finché l'app è aperta).
-const viewState = { metrics: null, selected: null };
+const viewState = { metrics: null, selected: null, period: '30' };
 
 let chartInstance = null;
 
@@ -30,7 +40,18 @@ export async function renderChart() {
   }
 
   if (viewState.metrics === null) viewState.metrics = new Set(['intensity']);
-  if (viewState.selected === null) viewState.selected = new Set(withData.slice(0, 2).map((b) => b.dose.id));
+
+  // Dosi nel periodo scelto (le liste arrivano già dalla più recente).
+  const period = PERIODS.find((p) => p.key === viewState.period) || PERIODS[PERIODS.length - 1];
+  const cutoff = period.days == null ? null : Date.now() - period.days * 24 * 3600 * 1000;
+  const inPeriod = cutoff == null ? withData : withData.filter((b) => new Date(b.dose.takenAt).getTime() >= cutoff);
+
+  if (viewState.selected === null) viewState.selected = new Set((inPeriod.length ? inPeriod : withData).slice(0, 2).map((b) => b.dose.id));
+
+  // In lista: le dosi del periodo + quelle già selezionate anche se fuori
+  // periodo (così si possono sempre togliere). Colore stabile per dose.
+  const listed = withData.filter((b) => inPeriod.includes(b) || viewState.selected.has(b.dose.id));
+  const colorIdx = new Map(withData.map((b, i) => [b.dose.id, i]));
 
   // Selettore metriche (multi-selezione)
   const metricBar = el('div', { class: 'chip-bar' });
@@ -48,11 +69,20 @@ export async function renderChart() {
 
   const canvasWrap = el('div', { class: 'chart-wrap' }, el('canvas', { id: 'effect-chart' }));
 
+  // Filtro per periodo (chips, un tocco). Cambiarlo ricostruisce la lista.
+  const periodBar = el('div', { class: 'chip-bar' });
+  for (const p of PERIODS) {
+    periodBar.append(el('button', {
+      class: 'chip chip-sm' + (p.key === period.key ? ' chip-on' : ''),
+      onClick: () => { if (viewState.period !== p.key) { viewState.period = p.key; nav.refresh(); } },
+    }, p.label));
+  }
+
   // Selettore dosi da sovrapporre
   const doseList = el('div', { class: 'dose-select' });
-  withData.forEach((b, i) => {
+  for (const b of listed) {
     const id = b.dose.id;
-    const color = PALETTE[i % PALETTE.length];
+    const color = PALETTE[colorIdx.get(id) % PALETTE.length];
     const checked = viewState.selected.has(id);
     doseList.append(el('label', { class: 'dose-select-item' },
       el('input', {
@@ -65,7 +95,10 @@ export async function renderChart() {
       el('span', { class: 'dose-swatch', style: `background:${color}` }),
       el('span', {}, `${fmtDate(b.dose.takenAt)} ${fmtTime(b.dose.takenAt)} · ${b.dose.doseMg}mg`),
     ));
-  });
+  }
+  if (!listed.length) {
+    doseList.append(el('p', { class: 'form-hint' }, 'Nessuna dose nel periodo scelto: allarga il periodo qui sopra.'));
+  }
 
   root.append(
     el('p', { class: 'view-title' }, 'Curva dell\'effetto'),
@@ -73,6 +106,7 @@ export async function renderChart() {
     metricBar,
     canvasWrap,
     el('p', { class: 'form-section' }, 'Dosi da confrontare'),
+    periodBar,
     doseList,
   );
 
