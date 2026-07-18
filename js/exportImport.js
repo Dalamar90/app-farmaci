@@ -35,11 +35,50 @@ function mergeData(localStores, localTombs, remoteStores, remoteTombs, localDefa
     }
     stores[s] = out;
   }
+  // Farmaci e tipi di effetto con lo stesso nome diventano UNA voce sola.
+  // Ogni dispositivo li crea con id casuali propri: senza questo passaggio il
+  // primo Unisci telefono+PC raddoppierebbe "Mal di testa", il farmaco, ecc.
+  const localIds = (s) => new Set((localStores[s] || []).map((r) => r.id));
+  dedupeByName(stores, localIds('meds'), 'meds', [{ store: 'doses', field: 'medicationId' }]);
+  dedupeByName(stores, localIds('sideEffectTypes'), 'sideEffectTypes', [{ store: 'sideEffectEntries', field: 'sideEffectTypeId' }]);
+
   const cutoff = Date.now() - 180 * 24 * 3600 * 1000;
   const tombstones = [...tomb.entries()]
     .map(([k, m]) => { const i = k.indexOf('|'); return { s: k.slice(0, i), id: k.slice(i + 1), m }; })
     .filter((t) => t.m >= cutoff);
   return { stores, tombstones };
+}
+
+// Tiene un solo record per nome (maiuscole/spazi ignorati), preferendo l'id già
+// presente in locale (così i riferimenti di questo dispositivo non cambiano), e
+// ricuce i riferimenti delle voci figlie verso l'id tenuto. Per i farmaci unisce
+// anche le dosi rapide dei due profili. NIENTE lapidi per gli id scartati:
+// sull'altro dispositivo quell'id è quello tenuto, una lapide lo ucciderebbe.
+function dedupeByName(stores, localIdSet, storeName, refs) {
+  const byName = new Map(); // nome normalizzato -> record tenuto
+  const dropped = new Map(); // id scartato -> id tenuto
+  const score = (r) => (localIdSet.has(r.id) ? 1 : 0);
+  for (const rec of stores[storeName] || []) {
+    const key = String(rec.name || '').trim().toLowerCase();
+    if (!key) continue; // senza nome: lascialo stare
+    const ex = byName.get(key);
+    if (!ex) { byName.set(key, rec); continue; }
+    let keep = ex, drop = rec;
+    if (score(rec) > score(ex)) { keep = rec; drop = ex; byName.set(key, keep); }
+    dropped.set(drop.id, keep.id);
+    if (Array.isArray(keep.quickDoses) || Array.isArray(drop.quickDoses)) {
+      keep.quickDoses = [...new Set([...(keep.quickDoses || []), ...(drop.quickDoses || [])])].sort((a, b) => a - b);
+    }
+  }
+  if (!dropped.size) return;
+  // Risolvi le catene (A→B poi B→C ⇒ A→C): capitano se c'erano già doppioni.
+  for (const [d, k0] of dropped) { let k = k0; while (dropped.has(k)) k = dropped.get(k); dropped.set(d, k); }
+  stores[storeName] = stores[storeName].filter((r) => !dropped.has(r.id));
+  for (const { store, field } of refs) {
+    for (const rec of stores[store] || []) {
+      if (dropped.has(rec[field])) rec[field] = dropped.get(rec[field]);
+    }
+  }
 }
 
 function download(filename, content, type) {
