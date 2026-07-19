@@ -161,6 +161,11 @@ export async function importJSONMerge(file) {
   const merged = mergeData(localStores, localTombs, data, backupTombs, Date.now());
   await applyStores(merged.stores);
   await setTombstones(merged.tombstones);
+
+  // Bilancio per l'utente: quante voci in più (o in meno) rispetto a prima.
+  // "Dati uniti" senza numeri nascondeva il caso in cui non entrava NULLA.
+  const count = (stores) => SYNC_STORES.reduce((n, s) => n + ((stores[s] || []).length), 0);
+  return { added: count(merged.stores) - count(localStores) };
 }
 
 // --- CSV --------------------------------------------------------------------

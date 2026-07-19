@@ -89,8 +89,8 @@ export function openGuide() {
     'I dati stanno solo su questo dispositivo: nessun account, nessun server, niente che parta da qui. Se cancelli i dati del browser, spariscono.',
     'Per averli anche altrove: Impostazioni › Dati e backup, scarica (o invia) il backup da un dispositivo e importalo sull\'altro.',
     list([
-      'Unisci: aggiunge e aggiorna senza cancellare niente. Per ogni voce vince la versione più recente. È quella da usare quasi sempre.',
-      'Sostituisci tutto: butta i dati di questo dispositivo e tiene solo quelli del backup.',
+      'Unisci: aggiunge e aggiorna; per ogni voce vince la versione più recente, e le cancellazioni fatte restano cancellate. È quella da usare quasi sempre.',
+      'Sostituisci tutto: butta i dati di questo dispositivo e tiene solo quelli del backup. È la scelta giusta per ripristinare un backup su un dispositivo vuoto o messo male.',
     ]),
   ]));
 

@@ -1,7 +1,7 @@
 // views/settings.js — configurazione: farmaci, effetti collaterali, promemoria EMA,
 // backup/export, e nota legale.
 
-import { getAll, put, del } from '../db.js';
+import { getAll, put, del, clearStore, setTombstones } from '../db.js';
 import { uid, el } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, closeSheet, toast, confirmDialog } from '../ui.js';
@@ -102,10 +102,12 @@ export async function renderSettings() {
       class: 'btn btn-danger btn-block',
       onClick: async () => {
         if (await confirmDialog('Cancellare TUTTI i dati (dosi, "come mi sento", effetti, coda)? Fai prima un backup!', { confirmLabel: 'Cancella tutto', danger: true })) {
-          for (const s of ['doses', 'checkins', 'sideEffectEntries', 'crashEntries']) {
-            const all = await getAll(s);
-            for (const r of all) await del(s, r.id);
-          }
+          // Reset del dispositivo: NIENTE lapidi. Cancellare voce per voce con
+          // del() marcherebbe tutto come "cancellato adesso", e un backup
+          // reimportato dopo verrebbe scartato in blocco dall'Unisci (successo
+          // davvero: export → cancella tutto → Unisci → archivio vuoto).
+          for (const s of ['doses', 'checkins', 'sideEffectEntries', 'crashEntries']) await clearStore(s);
+          await setTombstones([]);
           toast('Dati cancellati');
           nav.refresh();
         }
@@ -217,12 +219,18 @@ function importButton() {
         class: 'btn btn-primary btn-block',
         onClick: async () => {
           closeSheet();
-          try { await importJSONMerge(f); toast('Dati uniti'); nav.refresh(); }
-          catch (e) { toast('File non valido'); }
+          try {
+            const res = await importJSONMerge(f);
+            const n = Math.abs(res.added);
+            toast(res.added > 0 ? `Dati uniti: ${n} ${n === 1 ? 'voce aggiunta' : 'voci aggiunte'}`
+              : res.added < 0 ? `Dati uniti: ${n} ${n === 1 ? 'voce rimossa' : 'voci rimosse'} (cancellate altrove)`
+                : 'Unione finita: niente di nuovo da aggiungere');
+            nav.refresh();
+          } catch (e) { toast('File non valido'); }
           file.value = '';
         },
       }, 'Unisci (consigliato)'),
-      el('p', { class: 'form-hint' }, 'Aggiunge e aggiorna le voci del backup. Non cancella niente: per ogni voce vince la versione più recente.'),
+      el('p', { class: 'form-hint' }, 'Aggiunge e aggiorna le voci del backup; le cancellazioni fatte restano cancellate. Per ogni voce vince la versione più recente.'),
       el('button', {
         class: 'btn btn-danger btn-block',
         onClick: async () => {
