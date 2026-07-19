@@ -128,6 +128,19 @@ export function hexAlpha(hex, a) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
+// Versione dell'app in uso (la CACHE_VERSION del service worker che controlla
+// la pagina). Utile in Impostazioni per capire "che versione ho?". Null se il
+// service worker non c'è (primo avvio, o browser senza supporto).
+export function swVersion() {
+  return new Promise((resolve) => {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return resolve(null);
+    const ch = new MessageChannel();
+    const timer = setTimeout(() => resolve(null), 800);
+    ch.port1.onmessage = (e) => { clearTimeout(timer); resolve(typeof e.data === 'string' ? e.data : null); };
+    navigator.serviceWorker.controller.postMessage({ type: 'version' }, [ch.port2]);
+  });
+}
+
 // Escape minimale per inserire testo dell'utente nell'HTML.
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({

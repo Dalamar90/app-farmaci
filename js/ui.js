@@ -78,16 +78,19 @@ export function openSheet(title, contentNode, { actions = [], onClose } = {}) {
   );
   const overlay = el('div', { class: 'overlay' }, sheet);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSheet(); });
+  const onKey = (e) => { if (e.key === 'Escape') closeSheet(); };
+  document.addEventListener('keydown', onKey);
   document.body.append(overlay);
   requestAnimationFrame(() => overlay.classList.add('overlay-on'));
-  _sheetEl = { overlay, onClose };
+  _sheetEl = { overlay, onClose, onKey };
   return { close: closeSheet };
 }
 
 export function closeSheet() {
   if (!_sheetEl) return;
-  const { overlay, onClose } = _sheetEl;
+  const { overlay, onClose, onKey } = _sheetEl;
   _sheetEl = null;
+  document.removeEventListener('keydown', onKey);
   overlay.classList.remove('overlay-on');
   setTimeout(() => overlay.remove(), 200);
   if (onClose) onClose();
@@ -155,6 +158,9 @@ export function confirmDialog(message, { confirmLabel = 'Conferma', danger = fal
         { label: 'Annulla', kind: 'btn-secondary', onClick: () => { closeSheet(); resolve(false); } },
         { label: confirmLabel, kind: danger ? 'btn-danger' : 'btn-primary', onClick: () => { closeSheet(); resolve(true); } },
       ],
+      // Chiusa in qualsiasi altro modo (tocco fuori, X, Esc) = risposta "no".
+      // Senza questo la promessa restava appesa e il chiamante fermo per sempre.
+      onClose: () => resolve(false),
     });
   });
 }

@@ -1,8 +1,8 @@
 // views/settings.js — configurazione: farmaci, effetti collaterali, promemoria EMA,
 // backup/export, e nota legale.
 
-import { getAll, put, del, clearStore, setTombstones } from '../db.js';
-import { uid, el } from '../util.js';
+import { getAll, put, del, clearStore, setTombstones, getMeta } from '../db.js';
+import { uid, el, fmtDateTime, swVersion } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, closeSheet, toast, confirmDialog } from '../ui.js';
 import { exportJSON, importJSON, importJSONMerge, exportCSV, canShareBackup, shareJSON } from '../exportImport.js';
@@ -13,9 +13,10 @@ import { historyMomentOffsets } from '../stats.js';
 import { nav } from '../nav.js';
 
 export async function renderSettings() {
-  const [meds, sideTypes, calOn, moments, hist] = await Promise.all([
+  const [meds, sideTypes, calOn, moments, hist, lastBackup, version] = await Promise.all([
     getAll('meds'), getAll('sideEffectTypes'),
     calendarRemindersEnabled(), getReminderMoments(), historyMomentOffsets(),
+    getMeta('lastBackupAt'), swVersion(),
   ]);
 
   const root = el('div', { class: 'view view-settings' });
@@ -86,6 +87,9 @@ export async function renderSettings() {
   const dataCard = el('div', { class: 'card' },
     el('h3', { class: 'card-title' }, 'Dati e backup'),
     el('p', { class: 'form-hint' }, 'Tutti i dati restano sul tuo dispositivo. Per allineare PC e telefono: esporta il backup da uno, importalo sull\'altro con "Unisci" — non si perde nulla.'),
+    el('p', { class: 'form-hint backup-when' }, lastBackup
+      ? `Ultimo backup da questo dispositivo: ${fmtDateTime(lastBackup)}.`
+      : 'Ultimo backup da questo dispositivo: mai. I dati vivono solo qui: un backup ogni tanto li protegge.'),
     canShareBackup()
       ? el('button', { class: 'btn btn-primary btn-block', onClick: async () => { const ok = await shareJSON(); if (ok) toast('Backup inviato'); } }, icon('upload', { size: 18 }), 'Invia backup…')
       : null,
@@ -122,7 +126,7 @@ export async function renderSettings() {
       'Questa app serve solo a osservare e annotare l\'andamento personale. Non è uno strumento diagnostico, non fornisce consigli medici né indicazioni sul dosaggio o sugli orari. Ogni modifica alla terapia va sempre discussa con il medico.'),
   ));
 
-  root.append(el('p', { class: 'app-version' }, 'Tracciamento effetto farmaci · dati 100% locali'));
+  root.append(el('p', { class: 'app-version' }, 'Tracciamento effetto farmaci · dati 100% locali' + (version ? ` · ${version}` : '')));
   return root;
 }
 

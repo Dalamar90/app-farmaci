@@ -4,6 +4,7 @@
 import { ensureSeed, migrateData } from './db.js';
 import { el } from './util.js';
 import { icon } from './icons.js';
+import { toastAction } from './ui.js';
 import { nav } from './nav.js';
 import { openGuide } from './guide.js';
 import { renderDay } from './views/day.js';
@@ -119,6 +120,14 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (e.data && e.data.type === 'open-checkin') nav.go('day');
   });
+
+  // Quando il service worker nuovo prende il controllo c'è una versione nuova:
+  // un tocco su "Ricarica" e l'app è aggiornata (senza doppie riaperture).
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) { hadController = true; return; } // prima installazione, non è un aggiornamento
+    toastAction('App aggiornata', 'Ricarica', () => location.reload(), { ms: 8000 });
+  });
 }
 
 // Avvio.
@@ -128,4 +137,7 @@ if ('serviceWorker' in navigator) {
   await migrateData();
   await registerSW();
   await render();
+  // Chiedi al browser di NON sfrattare l'archivio se lo spazio scarseggia:
+  // qui dentro ci sono dati sanitari che vivono solo su questo dispositivo.
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
 })();

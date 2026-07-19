@@ -2,7 +2,7 @@
 // Strategia: "cache first" sui file dell'app, così funziona senza rete.
 // Aumenta CACHE_VERSION quando modifichi i file per forzare l'aggiornamento.
 
-const CACHE_VERSION = 'farmaci-v24';
+const CACHE_VERSION = 'farmaci-v25';
 
 const ASSETS = [
   'index.html',
@@ -73,6 +73,13 @@ self.addEventListener('fetch', (event) => {
         });
     }),
   );
+});
+
+// La pagina chiede la versione (mostrata in fondo a Impostazioni).
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'version' && event.ports && event.ports[0]) {
+    event.ports[0].postMessage(CACHE_VERSION);
+  }
 });
 
 // Tocco su una notifica di promemoria: apri/porta in primo piano l'app.

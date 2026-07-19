@@ -1,7 +1,7 @@
 // exportImport.js — backup/ripristino in JSON (con unione), condivisione
 // del backup e export in CSV.
 
-import { dumpAll, restoreAll, dumpStores, applyStores, getTombstones, setTombstones, SYNC_STORES } from './db.js';
+import { dumpAll, restoreAll, dumpStores, applyStores, getTombstones, setTombstones, setMeta, SYNC_STORES } from './db.js';
 import { fmtDateTime } from './util.js';
 
 // --- Fusione tra archivi (usata dall'import "Unisci") -----------------------
@@ -112,6 +112,7 @@ async function buildBackup() {
 export async function exportJSON() {
   const payload = await buildBackup();
   download(`backup-farmaci-${stamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  await setMeta('lastBackupAt', Date.now()); // per la riga "ultimo backup" in Impostazioni
 }
 
 // La condivisione (menù "Invia a…" del telefono) è disponibile su questo dispositivo?
@@ -129,6 +130,7 @@ export async function shareJSON() {
   const file = new File([JSON.stringify(payload, null, 2)], `backup-farmaci-${stamp()}.json`, { type: 'application/json' });
   try {
     await navigator.share({ files: [file], title: 'Backup farmaci' });
+    await setMeta('lastBackupAt', Date.now());
     return true;
   } catch (e) {
     return false; // annullato dall'utente o non supportato
